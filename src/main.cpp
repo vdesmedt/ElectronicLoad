@@ -53,6 +53,7 @@ int backlight = 0;
 #define UM_TEMP 1
 #define UM_VOLTAGE 2
 #define UM_CURRENT 4
+#define UM_POWER 8
 uint8_t lcd_refresh_mask = 255;
 #define WORKINGMODE_COUNT 4
 const char *working_modes[WORKINGMODE_COUNT] = {"CCur", "CRes", "CPow", "Batt"};
@@ -75,6 +76,7 @@ ClickEncoder *encoder;
 uint8_t workingMode = 0;
 int16_t setValues[WORKINGMODE_COUNT] = {0, 0, 0, 0};
 uint16_t read_temp = 0; // 1/10 °C
+uint8_t fanLevel = 0;
 uint16_t fanOnTemp[] = {300, 400};
 uint8_t fanHysteresis = 20;
 int16_t read_current = 0; // mA
@@ -255,11 +257,16 @@ void setOut()
 
 void refreshDisplay()
 {
+  static Statistic drawStats;
+  static unsigned long loopStart = 0;
+  loopStart = micros();
+
+  static uint8_t roundRobin = 0;
   static char buffer[10];
   if (menu->GetCurrentPage() == 0)
   {
     //Temp
-    if (lcd_refresh_mask & UM_TEMP)
+    if (lcd_refresh_mask & UM_TEMP && roundRobin == 0)
     {
       lcd1.setCursor(11, 0);
       lcd1.print(dtostrf((double)read_temp / 10, 3, 1, buffer));
@@ -267,28 +274,48 @@ void refreshDisplay()
       lcd1.print("[");
       lcd1.print(fanLevel);
       lcd1.print("]");
+      lcd_refresh_mask &= ~UM_TEMP;
+      menu->PrintCursor();
     }
 
     //Readings
-    if (lcd_refresh_mask && UM_CURRENT)
+    if (lcd_refresh_mask & UM_CURRENT && roundRobin == 1)
     {
       lcd1.setCursor(0, 1);
       lcd1.print(dtostrf((double)read_current / 1000, 5, 3, buffer));
+      lcd_refresh_mask &= ~UM_CURRENT;
+      menu->PrintCursor();
     }
-    if (lcd_refresh_mask && UM_VOLTAGE)
+    if (lcd_refresh_mask & UM_VOLTAGE && roundRobin == 2)
     {
       lcd1.setCursor(7, 1);
       lcd1.print(dtostrf((double)read_voltage / 1000, 5, 3, buffer));
+      lcd_refresh_mask &= ~UM_VOLTAGE;
+      menu->PrintCursor();
     }
-    if (lcd_refresh_mask & (UM_CURRENT | UM_VOLTAGE))
+    if (lcd_refresh_mask & UM_POWER && roundRobin == 3)
     {
       lcd1.setCursor(14, 1);
       lcd1.print(dtostrf((double)read_voltage * read_current / 1000000, 5, 3, buffer));
+      lcd_refresh_mask &= ~UM_POWER;
+      menu->PrintCursor();
     }
+    roundRobin = (roundRobin + 1) % 4;
   }
-  if (lcd_refresh_mask > 0)
-    menu->PrintCursor();
-  lcd_refresh_mask = 0;
+
+  drawStats.add(micros() - loopStart);
+  if (drawStats.count() == 5000)
+  {
+    Serial.print("RefeshLcd:Stats [Avg/Min->Max/Var]:");
+    Serial.print((uint16_t)drawStats.average());
+    Serial.print(" / ");
+    Serial.print((uint16_t)drawStats.minimum());
+    Serial.print("->");
+    Serial.print((uint16_t)drawStats.maximum());
+    Serial.print(" / ");
+    Serial.println((uint16_t)drawStats.variance());
+    drawStats.clear();
+  }
 }
 
 void loadButton_click()
@@ -442,7 +469,6 @@ void performReadings()
 }
 
 //TODO Adjust PWM's from settings (need scrollable menu)
-uint8_t fanLevel = 0;
 void adjustFanSpeed()
 {
   static uint16_t fanLevelPwm[] = {0, 900, 1023};
@@ -469,7 +495,6 @@ void adjustFanSpeed()
 Statistic loopStats;
 void setup()
 {
-  //Wire.setClock(400000);
   Serial.begin(9600);
   Serial.print("Hello");
 
@@ -504,6 +529,8 @@ void setup()
   dac.setValue(1);
   dac.setValue(0);
   setOut();
+
+  Wire.setClock(400000); //Done after dac.Begin as it itself setClock to 100.000
 
   setupMenu();
 

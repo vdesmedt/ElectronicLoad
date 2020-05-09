@@ -41,10 +41,13 @@
 #define DAC_ADDR 0x61
 #endif
 #define ADC_ADDR 0x68
+#define RTC_ADDR 0x6F
+#define IOE_ADDR 0x20
 #define DAC_REF_VOLTAGE 3300
 
 MCP4725 dac(DAC_ADDR);
 MCP342x adc = MCP342x(ADC_ADDR);
+RTCx _rtc(RTC_ADDR);
 //END ADC-DAC
 
 //BEGIN - LCD ###
@@ -337,56 +340,51 @@ void selfTest()
 
   //Check ADC Presence
   lcd1.setCursor(0, 1);
-  lcd1.print("ADC on ");
-  lcd1.print(ADC_ADDR, HEX);
-  lcd1.print(":");
+  lcd1.print("ADC:");
   Wire.requestFrom(ADC_ADDR, 1);
   delay(1);
   if (!Wire.available())
     selfTestResult |= 0x01;
-  lcd1.print(Wire.available() ? "OK" : "NOK");
-  Serial.println(Wire.available() ? "ADC OK" : "ADC NOK");
+  lcd1.print(selfTestResult & 0x01 ? "NOK" : "OK ");
+  Serial.println(selfTestResult & 0x01 ? "ADC NOK" : "ADC OK");
 
   //Check DAC Presence
-  lcd1.setCursor(0, 2);
-  lcd1.print("DAC on ");
-  lcd1.print(DAC_ADDR, HEX);
-  lcd1.print(":");
+  lcd1.print("  DAC:");
   Wire.requestFrom(DAC_ADDR, 1);
   delay(1);
   if (!Wire.available())
     selfTestResult |= 0x02;
-  lcd1.print(Wire.available() ? "OK" : "NOK");
-  Serial.println(Wire.available() ? "DAC OK" : "DAC NOK");
+  lcd1.print(selfTestResult & 0x02 ? "NOK" : "OK");
+  Serial.println(selfTestResult & 0x02 ? "DAC NOK" : "DAC OK");
 
   //Check RTC Presence
-  lcd1.setCursor(0, 3);
-  lcd1.print("RTC ");
-
-  if (rtc.autoprobe())
-  {
-    lcd1.print(rtc.getDeviceName());
-    lcd1.print(" at ");
-    lcd1.print(rtc.getAddress());
-  }
-  else
-  {
-    lcd1.print("Not found");
+  lcd1.setCursor(0, 2);
+  lcd1.print("RTC:");
+  Wire.beginTransmission(RTC_ADDR);
+  Wire.write(uint8_t(0));
+  Wire.endTransmission();
+  Wire.requestFrom(RTC_ADDR, (uint8_t)1);
+  if (!Wire.available())
     selfTestResult |= 0x04;
-  }
+  lcd1.print(selfTestResult & 0x04 ? "NOK" : "OK ");
+  Serial.println(selfTestResult & 0x04 ? "RTC NOK" : "RTC OK");
+
+  //Check IOX
+  lcd1.print("IOX:");
+  Wire.beginTransmission(IOE_ADDR);
+  Wire.write(uint8_t(0));
+  Wire.endTransmission();
+  Wire.requestFrom(IOE_ADDR, (uint8_t)1);
+  if (!Wire.available())
+    selfTestResult |= 0x08;
+  lcd1.print(selfTestResult & 0x08 ? "NOK" : "OK ");
+  Serial.println(selfTestResult & 0x08 ? "IOE NOK" : "IOE OK");
 
   //Result ?
-  lcd1.setCursor(0, 4);
   if (selfTestResult > 0)
-  {
-    lcd1.print("Failed :");
-    lcd1.print(selfTestResult, HEX);
     delay(2000);
-  }
 
   //Booting
-  lcd1.print("Booting...");
-  delay(500);
   Serial.println("Self test done");
 }
 

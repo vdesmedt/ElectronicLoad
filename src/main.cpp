@@ -12,6 +12,7 @@
 #include <RTCx.h>
 #include <Menu.h>
 #include <Statistic.h>
+#include <Filters/SMA.hpp>
 
 //BEGIN - PIN ATTRIBUTION ###
 #ifdef DEBUG_BOARD
@@ -359,6 +360,7 @@ void selfTest()
 }
 
 //TODO : Auto Gain adjustment : For low voltage, 4x will increase resolution
+SMA<10, uint16_t, uint32_t> fanSma;
 void performReadings()
 {
   static MCP342x::Config ch1Config(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1);
@@ -368,19 +370,15 @@ void performReadings()
   static uint8_t adcErr;
   static int8_t runConvertCh = 1;
 
-  static uint8_t rawTemp, oldRawTemp;
+  static uint8_t rawTemp;
   static unsigned long lastTempRefreshTime = 0;
 
-  rawTemp = analogRead(P_LM35);
-  if (rawTemp != oldRawTemp)
+  rawTemp = fanSma(analogRead(P_LM35));
+  read_temp = rawTemp * 4.83871;
+  if (lastTempRefreshTime + 1000 < millis())
   {
-    read_temp = rawTemp * 4.83871;
-    oldRawTemp = rawTemp;
-    if (lastTempRefreshTime + 1000 < millis())
-    {
-      lcd_refresh_mask |= UM_TEMP;
-      lastTempRefreshTime = millis();
-    }
+    lcd_refresh_mask |= UM_TEMP;
+    lastTempRefreshTime = millis();
   }
 
   if (runConvertCh == 1)
@@ -439,28 +437,7 @@ void performReadings()
   }
 }
 
-uint8_t GetFanLevel(uint16_t newValue)
-{
-  static uint16_t lastDiffValue = 0;
-  static uint16_t lastLevel = 0;
-  if (newValue == lastDiffValue)
-    return lastLevel;
-
-  int16_t shift = newValue > lastDiffValue ? fanHysteresis : -fanHysteresis;
-  uint8_t newLevel;
-
-  newLevel = 0;
-  if (newValue > fanOnTemp[0] + shift)
-    newLevel = 1;
-  if (newValue > fanOnTemp[1] + shift)
-    newLevel = 2;
-
-  lastDiffValue = newValue;
-  lastLevel = newLevel;
-  return newLevel;
-}
-
-Statistic stat;
+Statistic loopStats;
 void setup()
 {
   //Wire.setClock(400000);
@@ -501,7 +478,7 @@ void setup()
 
   setupMenu();
 
-  stat.clear();
+  loopStats.clear();
 }
 
 void loop()
@@ -515,14 +492,6 @@ void loop()
   performReadings();
   refreshDisplay();
 
-  Serial.print(read_temp);
-  Serial.print(";");
-  Serial.println(GetFanLevel(read_temp));
-  if (read_temp > 300)
-    digitalWrite(P_FAN, HIGH);
-  else
-    digitalWrite(P_FAN, LOW);
-
   //Encoder mgmnt
   int16_t enc = encoder->getValue();
   if (enc != 0)
@@ -535,18 +504,17 @@ void loop()
     menu->LongClick();
   oldState = buttonState;
 
-  stat.add(micros() - loopStart);
-  if (stat.count() == 5000)
+  loopStats.add(micros() - loopStart);
+  if (loopStats.count() == 5000)
   {
-    Serial.print(millis());
-    Serial.print(":Stats [Avg/Min->Max/Var]:");
-    Serial.print((uint16_t)stat.average());
+    Serial.print("LoopStats:Stats [Avg/Min->Max/Var]:");
+    Serial.print((uint16_t)loopStats.average());
     Serial.print(" / ");
-    Serial.print((uint16_t)stat.minimum());
+    Serial.print((uint16_t)loopStats.minimum());
     Serial.print("->");
-    Serial.print((uint16_t)stat.maximum());
+    Serial.print((uint16_t)loopStats.maximum());
     Serial.print(" / ");
-    Serial.println((uint16_t)stat.variance());
-    stat.clear();
+    Serial.println((uint16_t)loopStats.variance());
+    loopStats.clear();
   }
 }

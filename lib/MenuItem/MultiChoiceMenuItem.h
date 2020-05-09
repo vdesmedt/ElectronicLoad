@@ -1,0 +1,37 @@
+#ifndef MultiChoiceMenuItem_h_
+#define MultiChoiceMenuItem_h_
+
+#include <Arduino.h>
+#include <MenuItem.h>
+
+class MultiChoiceMenuItem : public MenuItem
+{
+public:
+    MultiChoiceMenuItem(const char *choices[], uint8_t choicesCount, uint8_t cursorX, uint8_t cursorY, bool (*onChange)(int8_t) = NULL) : MenuItem(MultiChoice, cursorX, cursorY)
+    {
+        _choices = (char **)choices;
+        _choiceCount = choicesCount;
+        _onChange = onChange;
+        for (uint8_t i = 0; i < choicesCount; i++)
+            this->_choiceMaxLength = max(this->_choiceMaxLength, strlen(choices[i]));
+        currentChoiceIndex = 0;
+    }
+
+    bool RotaryIncrement(int8_t steps);
+    bool Click(bool *focus, uint8_t *page);
+    bool LongClick(bool *focus, uint8_t *page);
+
+    void Print(LiquidCrystal_PCF8574 *lcd);
+
+    uint8_t currentChoiceIndex = -1;
+    char *GetCurrentChoice() { return this->_choices[this->currentChoiceIndex]; }
+    uint8_t GetChoiceMaxLength() { return this->_choiceMaxLength; }
+    bool (*_onChange)(int8_t);
+    bool switchOnClick;
+
+protected:
+    char **_choices;
+    uint8_t _choiceCount = 0;
+    uint8_t _choiceMaxLength = 0;
+};
+#endif

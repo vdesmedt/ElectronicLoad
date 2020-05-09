@@ -395,7 +395,7 @@ SMA<10, uint16_t, uint32_t> fanSma;
 void performReadings()
 {
   static MCP342x::Config ch1Config(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1);
-  static MCP342x::Config ch2Config(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1);
+  static MCP342x::Config ch2Config(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain4);
   static MCP342x::Config adcStatus;
   static long adcValue;
   static uint8_t adcErr;
@@ -441,7 +441,7 @@ void performReadings()
     adcErr = adc.read(adcValue, adcStatus);
     if (!adcErr && adcStatus.isReady())
     {
-      newVoltage = adcValue * 50 * (2048.0 / 32768);
+      newVoltage = adcValue * (2048.0 / 32768) * 50;
       if (read_voltage != newVoltage)
       {
         read_voltage = newVoltage;
@@ -457,7 +457,7 @@ void performReadings()
     adcErr = adc.read(adcValue, adcStatus);
     if (!adcErr && adcStatus.isReady())
     {
-      newCurrent = adcValue * (2048.0 / 32768);
+      newCurrent = adcValue * (2048.0 / 32768) * 2.5;
       if (read_current != newCurrent)
       {
         read_current = newCurrent;

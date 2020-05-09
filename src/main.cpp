@@ -75,7 +75,7 @@ ClickEncoder *encoder;
 uint8_t workingMode = 0;
 int16_t setValues[WORKINGMODE_COUNT] = {0, 0, 0, 0};
 uint16_t read_temp = 0; // 1/10 °C
-uint16_t fanOnTemp[2] = {300, 400};
+uint16_t fanOnTemp[] = {300, 400};
 uint8_t fanHysteresis = 20;
 int16_t read_current = 0; // mA
 int16_t read_voltage = 0; // mV
@@ -139,7 +139,7 @@ void menu_pageChanged(uint8_t newPageIndex)
     lcd1.setCursor(0, 0);
     lcd1.print("Mode:");
 
-    lcd1.setCursor(18, 0);
+    lcd1.setCursor(15, 0);
     lcd1.print((char)0xDF);
     lcd1.print("C");
 
@@ -261,8 +261,12 @@ void refreshDisplay()
     //Temp
     if (lcd_refresh_mask & UM_TEMP)
     {
-      lcd1.setCursor(14, 0);
+      lcd1.setCursor(11, 0);
       lcd1.print(dtostrf((double)read_temp / 10, 3, 1, buffer));
+      lcd1.setCursor(17, 0);
+      lcd1.print("[");
+      lcd1.print(fanLevel);
+      lcd1.print("]");
     }
 
     //Readings
@@ -437,6 +441,31 @@ void performReadings()
   }
 }
 
+//TODO Adjust PWM's from settings (need scrollable menu)
+uint8_t fanLevel = 0;
+void adjustFanSpeed()
+{
+  static uint16_t fanLevelPwm[] = {0, 900, 1023};
+  switch (fanLevel)
+  {
+  case 0:
+    if (read_temp > fanOnTemp[0] + fanHysteresis)
+      fanLevel = 1;
+    break;
+  case 1:
+    if (read_temp < fanOnTemp[0] - fanHysteresis)
+      fanLevel = 0;
+    else if (read_temp > fanOnTemp[1] + fanHysteresis)
+      fanLevel = 2;
+    break;
+  case 2:
+    if (read_temp < fanOnTemp[1] - fanHysteresis)
+      fanLevel = 1;
+    break;
+  }
+  analogWrite(P_FAN, fanLevelPwm[fanLevel]);
+}
+
 Statistic loopStats;
 void setup()
 {
@@ -490,6 +519,7 @@ void loop()
   loopStart = micros();
   pushButton->tick();
   performReadings();
+  adjustFanSpeed();
   refreshDisplay();
 
   //Encoder mgmnt

@@ -53,13 +53,15 @@ RTCx _rtc(RTC_ADDR);
 //BEGIN - LCD ###
 LiquidCrystal_PCF8574 lcd1(0x27);
 int backlight = 0;
+#define LCD_READING_MAX_UPDATE_RATE 200
+#define LCD_TEMP_MAX_UPDATE_RATE 500
 #define UM_TEMP 1
 #define UM_VOLTAGE 2
 #define UM_CURRENT 4
 #define UM_POWER 8
 uint8_t lcd_refresh_mask = 255;
 #define WORKINGMODE_COUNT 4
-const char *working_modes[WORKINGMODE_COUNT] = {"CCur", "CRes", "CPow", "Batt"};
+const char *working_modes[WORKINGMODE_COUNT] = {"C Curr", "C Resis", "C Power", "Battery"};
 const char *onOffChoices[2] = {"On", "Off"};
 const char mode_dimensions[5] = {'I', 'V', 'R', 'P', 'I'};
 const char mode_units[5] = {'A', 'V', (char)0xF4, 'W', 'A'};
@@ -389,7 +391,8 @@ void selfTest()
 }
 
 //TODO : Auto Gain adjustment : For low voltage, 4x will increase resolution
-SMA<10, uint16_t, uint32_t> fanSma;
+//TODO : Switch to continuous convertion
+SMA<10, uint16_t, uint32_t> temperatureSMA;
 void performReadings()
 {
   static MCP342x::Config ch1Config(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1);
@@ -399,17 +402,18 @@ void performReadings()
   static uint8_t adcErr;
   static int8_t runConvertCh = 1;
 
+  //Temperature Reading
   static uint8_t rawTemp;
-  static unsigned long lastTempRefreshTime = 0;
-
-  rawTemp = fanSma(analogRead(P_LM35));
+  rawTemp = temperatureSMA(analogRead(P_LM35));
   read_temp = rawTemp * 4.83871;
-  if (lastTempRefreshTime + 1000 < millis())
+  static unsigned long lastTemperatureLcdUpdate = 0;
+  if (lastTemperatureLcdUpdate + LCD_TEMP_MAX_UPDATE_RATE < millis())
   {
     lcd_refresh_mask |= UM_TEMP;
-    lastTempRefreshTime = millis();
+    lastTemperatureLcdUpdate = millis();
   }
 
+  //Voltage & Current Reading (alternate)
   if (runConvertCh == 1)
   {
     adcErr = adc.convert(ch1Config);
@@ -440,10 +444,15 @@ void performReadings()
     if (!adcErr && adcStatus.isReady())
     {
       newVoltage = adcValue * (2048.0 / 32768) * 50;
-      if (read_voltage != newVoltage)
+      if (newVoltage != read_voltage)
       {
         read_voltage = newVoltage;
-        lcd_refresh_mask |= UM_VOLTAGE;
+        static unsigned long lastVoltageLcdUpdate = 0;
+        if (lastVoltageLcdUpdate + LCD_READING_MAX_UPDATE_RATE < millis())
+        {
+          lcd_refresh_mask |= (UM_VOLTAGE | UM_POWER);
+          lastVoltageLcdUpdate = millis();
+        }
       }
       runConvertCh = 2;
     }
@@ -456,10 +465,15 @@ void performReadings()
     if (!adcErr && adcStatus.isReady())
     {
       newCurrent = adcValue * (2048.0 / 32768) * 2.5;
-      if (read_current != newCurrent)
+      if (newCurrent != read_current)
       {
         read_current = newCurrent;
-        lcd_refresh_mask |= UM_CURRENT;
+        static unsigned long lastCurrentLcdUpdate = 0;
+        if (lastCurrentLcdUpdate + LCD_READING_MAX_UPDATE_RATE < millis())
+        {
+          lcd_refresh_mask |= (UM_CURRENT | UM_POWER);
+          lastCurrentLcdUpdate = millis();
+        }
       }
       runConvertCh = 1;
     }

@@ -510,6 +510,8 @@ void setup()
   Timer1.initialize(1000);
   Timer1.attachInterrupt(timerIsr);
   encoder->setAccelerationEnabled(true);
+  encoder->setDoubleClickEnabled(false);
+  encoder->setHoldTime(500);
 
   //Setup Load button
   pushButton = new OneButton(P_LOADON_BTN, 0, false);

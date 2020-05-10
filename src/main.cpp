@@ -13,6 +13,7 @@
 #include <Menu.h>
 #include <Statistic.h>
 #include <Filters/SMA.hpp>
+#include <specialLcdChar.h>
 
 //BEGIN - PIN ATTRIBUTION ###
 #ifdef DEBUG_BOARD
@@ -146,7 +147,7 @@ void menu_pageChanged(uint8_t newPageIndex)
     lcd1.setCursor(0, 0);
     lcd1.print("Mode:");
 
-    lcd1.setCursor(15, 0);
+    lcd1.setCursor(17, 0);
     lcd1.print((char)0xDF);
     lcd1.print("C");
 
@@ -273,12 +274,10 @@ void refreshDisplay()
     //Temp
     if (lcd_refresh_mask & UM_TEMP && roundRobin == 0)
     {
-      lcd1.setCursor(11, 0);
+      lcd1.setCursor(13, 0);
       lcd1.print(dtostrf((double)read_temp / 10, 3, 1, buffer));
-      lcd1.setCursor(17, 0);
-      lcd1.print("[");
-      lcd1.print(fanLevel);
-      lcd1.print("]");
+      lcd1.setCursor(19, 0);
+      lcd1.write(fanLevel);
       lcd_refresh_mask &= ~UM_TEMP;
       menu->PrintCursor();
     }
@@ -513,6 +512,9 @@ void setup()
   // initialize the lcd
   lcd1.begin(20, 4);
   lcd1.setBacklight(255);
+  lcd1.createChar(0, fanLevel1B);
+  lcd1.createChar(1, fanLevel2B);
+  lcd1.createChar(2, fanLevel3B);
 
   pinMode(P_LM35, INPUT);
   pinMode(P_FAN, OUTPUT);

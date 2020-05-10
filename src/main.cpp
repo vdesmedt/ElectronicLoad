@@ -250,7 +250,7 @@ void setOut()
 {
   if (onOff)
   {
-    uint16_t newDacValue = ((double)setValues[workingMode] / 1000) * (4096.0 / 3.3);
+    uint16_t newDacValue = setValues[workingMode];
     dac.setValue(newDacValue);
     digitalWrite(P_LOADON_LED, HIGH);
   }

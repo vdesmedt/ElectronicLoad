@@ -13,7 +13,9 @@ public:
         targetPageIndex = destinationPageIndex;
     };
 
-    void Print(LiquidCrystal_PCF8574 *lcd);
+    virtual const char *GetLabel();
+    virtual uint8_t GetCursorOffset(bool focus);
+
     bool Click(bool *focus, uint8_t *page);
     uint8_t targetPageIndex = -1;
 

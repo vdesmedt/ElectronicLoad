@@ -1,8 +1,13 @@
 #include <GotoPageMenuItem.h>
 
-void GoToPageMenuItem::Print(LiquidCrystal_PCF8574 *lcd)
+const char *GoToPageMenuItem::GetLabel()
 {
-    lcd->print(_title);
+    return _title;
+}
+
+uint8_t GoToPageMenuItem::GetCursorOffset(bool focus)
+{
+    return 0;
 }
 
 bool GoToPageMenuItem::Click(bool *focus, uint8_t *page)

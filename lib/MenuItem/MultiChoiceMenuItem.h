@@ -21,11 +21,10 @@ public:
     bool Click(bool *focus, uint8_t *page);
     bool LongClick(bool *focus, uint8_t *page);
 
-    void Print(LiquidCrystal_PCF8574 *lcd);
+    virtual const char *GetLabel();
+    virtual uint8_t GetCursorOffset(bool focus);
 
     uint8_t currentChoiceIndex = -1;
-    char *GetCurrentChoice() { return this->_choices[this->currentChoiceIndex]; }
-    uint8_t GetChoiceMaxLength() { return this->_choiceMaxLength; }
     bool (*_onChange)(int8_t);
     bool switchOnClick;
 

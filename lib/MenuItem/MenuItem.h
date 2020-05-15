@@ -4,6 +4,9 @@
 #include <Arduino.h>
 #include <LiquidCrystal_PCF8574.h>
 
+#define UM_PREFIX 1 << 0
+#define UM_SUFFIX 1 << 1
+
 class MenuItem
 {
 public:
@@ -14,11 +17,30 @@ public:
         GoToPage,
     };
 
+    enum cursorType
+    {
+        Normal,
+        Blink,
+    };
+
     MenuItem(enum menuItemType type, uint8_t cursorX, uint8_t cursorY);
+    void SetPrefix(const char *prefix)
+    {
+        _prefix = prefix;
+        _updateMask |= UM_PREFIX;
+    }
+    void SetSuffix(const char *suffix)
+    {
+        _suffix = suffix;
+        _updateMask |= UM_SUFFIX;
+    }
 
     enum menuItemType GetType() { return this->_menuType; }
-    virtual void Print(LiquidCrystal_PCF8574 *lcd) = 0;
-    virtual void PrintCursor(LiquidCrystal_PCF8574 *lcd, bool focus);
+    virtual const char *GetPrefix() { return _prefix ? _prefix : ""; }
+    virtual const char *GetSufix() { return _suffix ? _suffix : ""; }
+    virtual const char *GetLabel() = 0;
+    virtual uint8_t GetCursorOffset(bool focus) { return 0; }
+    virtual enum cursorType GetCursorType(bool focus) { return focus ? Blink : Normal; }
 
     // returns true if Print is needed
     virtual bool RotaryIncrement(int8_t steps) { return true; };
@@ -30,6 +52,9 @@ public:
 
 protected:
     enum menuItemType _menuType;
+    const char *_prefix = NULL;
+    const char *_suffix = NULL;
+    uint8_t _updateMask = 0;
 };
 
 #endif

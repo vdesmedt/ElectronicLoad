@@ -11,7 +11,7 @@ bool MultiChoiceMenuItem::RotaryIncrement(int8_t steps)
         else if (ni >= _choiceCount)
             ni = switchOnClick ? 0 : _choiceCount - 1;
 
-        if (this->_onChange(this->currentChoiceIndex))
+        if (this->_onChange(ni))
         {
             this->currentChoiceIndex = ni;
             return true;
@@ -29,7 +29,7 @@ bool MultiChoiceMenuItem::Click(bool *focus, uint8_t *page)
     }
     else
     {
-        *focus = true;
+        *focus = !*focus;
         return false;
     }
 }
@@ -39,13 +39,13 @@ bool MultiChoiceMenuItem::LongClick(bool *focus, uint8_t *page)
     return false;
 }
 
-//TODO : review leading space logic
-void MultiChoiceMenuItem::Print(LiquidCrystal_PCF8574 *lcd)
+const char *MultiChoiceMenuItem::GetLabel()
 {
-    char *cc = this->GetCurrentChoice();
-    lcd->print(cc);
-    for (uint8_t i = 0; i < this->GetChoiceMaxLength() - strlen(cc); i++)
-    {
-        lcd->print(" ");
-    }
+    return _choices[currentChoiceIndex];
+}
+uint8_t MultiChoiceMenuItem::GetCursorOffset(bool focus)
+{
+    if (_prefix)
+        return strlen(_prefix);
+    return 0;
 }

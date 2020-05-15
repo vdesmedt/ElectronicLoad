@@ -19,9 +19,9 @@ public:
     bool Click(bool *focus, uint8_t *page);
     bool LongClick(bool *focus, uint8_t *page);
 
-    void Print(LiquidCrystal_PCF8574 *lcd);
-    void PrintCursor(LiquidCrystal_PCF8574 *lcd, bool focus);
-
+    virtual const char *GetLabel();
+    virtual uint8_t GetCursorOffset(bool focus);
+    virtual enum cursorType GetCursorType(bool focus);
     void SetValue(int32_t value)
     {
         this->_value = value;

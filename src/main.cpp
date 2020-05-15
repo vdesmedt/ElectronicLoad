@@ -1,4 +1,4 @@
-#define DEBUG_BOARD_
+#define DEBUG_BOARD
 
 #include <Wire.h>
 #include <Arduino.h>
@@ -23,7 +23,7 @@
 #define P_LOADON_BTN 8
 #define P_LOADON_LED 7
 #define P_LM35 A6
-#define P_FAN 7
+#define P_FAN 6
 #else
 #define P_ENC1 4
 #define P_ENC2 3
@@ -56,17 +56,20 @@ LiquidCrystal_PCF8574 lcd1(0x27);
 int backlight = 0;
 #define LCD_READING_MAX_UPDATE_RATE 200
 #define LCD_TEMP_MAX_UPDATE_RATE 500
-#define UM_TEMP 1
-#define UM_VOLTAGE 2
-#define UM_CURRENT 4
-#define UM_POWER 8
+#define UM_TEMP 1 << 0
+#define UM_VOLTAGE 1 << 1
+#define UM_CURRENT 1 << 2
+#define UM_POWER 1 << 3
+#define UM_LOAD_ONOFF 1 << 4
 uint8_t lcd_refresh_mask = 255;
 #define WORKINGMODE_COUNT 4
-const char *working_modes[WORKINGMODE_COUNT] = {"C Curr", "C Resis", "C Power", "Battery"};
-const char *onOffChoices[2] = {"On", "Off"};
-const char mode_dimensions[5] = {'I', 'V', 'R', 'P', 'I'};
-const char mode_units[5] = {'A', 'V', (char)0xF4, 'W', 'A'};
+const char *working_modes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "BA"};
+const char *onOffChoices[] = {"On", "Off"};
+const char *mode_units[WORKINGMODE_COUNT] = {"A", "O", "W", "A"};
+#define BATT_TYPE_COUNT 2
+const char *battTypes[BATT_TYPE_COUNT] = {"Lipo", "NiMh"};
 Menu *menu;
+MultiDigitValueMenuItem *setValueMenuItem = NULL;
 //END - LCD ###
 
 //BEGIN - Encoder ###
@@ -79,6 +82,10 @@ ClickEncoder *encoder;
 //END - Encoder ###
 
 //BEGIN - Load ###
+uint16_t r17Resistance = 1000; // 1/10 mΩ
+uint8_t battType = 0;
+uint8_t battCellCutOut = 32; // 1/10 V
+uint8_t battCellCount = 1;
 uint8_t workingMode = 0;
 int16_t setValues[WORKINGMODE_COUNT] = {0, 0, 0, 0};
 uint16_t read_temp = 0; // 1/10 °C
@@ -93,7 +100,6 @@ bool onOff = false;
 OneButton *pushButton;
 
 void timerIsr();
-void printSettingsDimensionAndUnits();
 bool menu_modeChanged(int32_t newMode);
 bool menu_setValueChanged(int32_t newValue);
 void menu_pageChanged(uint8_t newPageIndex);
@@ -111,19 +117,13 @@ void timerIsr()
   encoder->service();
 }
 
-void printSettingsDimensionAndUnits()
-{
-  lcd1.setCursor(4, 2);
-  lcd1.write(mode_dimensions[workingMode]);
-  lcd1.write(':');
-  lcd1.setCursor(12, 2);
-  lcd1.write(mode_units[workingMode]);
-}
-
 bool menu_modeChanged(int8_t newMode)
 {
+  Serial.print("New mode:");
+  Serial.println(newMode);
   workingMode = newMode;
-  printSettingsDimensionAndUnits();
+  setValueMenuItem->SetSuffix(mode_units[newMode]);
+  menu->PrintItem(setValueMenuItem);
   return true;
 }
 
@@ -138,15 +138,12 @@ bool menu_setValueChanged(int32_t newValue)
   return true;
 }
 
-void menu_pageChanged(uint8_t newPageIndex)
+void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
 {
   lcd1.clear();
   switch (newPageIndex)
   {
   case 0:
-    lcd1.setCursor(0, 0);
-    lcd1.print("Mode:");
-
     lcd1.setCursor(17, 0);
     lcd1.print((char)0xDF);
     lcd1.print("C");
@@ -158,29 +155,14 @@ void menu_pageChanged(uint8_t newPageIndex)
     lcd1.setCursor(19, 1);
     lcd1.print("W");
 
-    lcd1.setCursor(0, 2);
-    lcd1.print("SET ");
-    printSettingsDimensionAndUnits();
     lcd_refresh_mask = 0xFF;
-    break;
-  case 1:
-    lcd1.setCursor(0, 1);
-    lcd1.print("BackLight:");
-    break;
-  case 2:
-    lcd1.setCursor(0, 1);
-    lcd1.print("On Temp  :");
-    lcd1.setCursor(0, 2);
-    lcd1.print("Hysteres :");
-    lcd1.setCursor(0, 3);
-    lcd1.print("Fan FdBck:");
     break;
   }
 }
 
 bool menu_BackLightChanged(int8_t newValue)
 {
-  Serial.print("menu_BackLightChanged");
+  lcd1.setBacklight(newValue ? 0 : 255);
   return true;
 }
 
@@ -218,30 +200,85 @@ bool menu_FanHysteresisChanged(int32_t newValue)
   return false;
 }
 
+bool menu_R17Changed(int32_t newValue)
+{
+  return true;
+}
+
+bool menu_BattTypeChanged(int8_t newValue)
+{
+  if (newValue >= 0 && newValue < BATT_TYPE_COUNT)
+  {
+    battType = newValue;
+    return true;
+  }
+  return false;
+}
+
+bool menu_cutOffChanged(int32_t newValue)
+{
+  if (newValue >= 0 && newValue <= 300)
+  {
+    battCellCutOut = newValue;
+    return true;
+  }
+  return false;
+}
+
+bool menu_battCellCountChanged(int32_t newValue)
+{
+  if (newValue >= 1 && newValue <= 8)
+  {
+    battCellCount = newValue;
+    return true;
+  }
+  return false;
+}
+
 void setupMenu()
 {
-  menu = new Menu(3, 10);
+  MultiDigitValueMenuItem *vmi;
+  MultiChoiceMenuItem *cmi;
+
+  menu = new Menu(3, 20);
   //Page 0: Main Page
   menu->AddPage();
-  menu->AddMultiChoice(working_modes, WORKINGMODE_COUNT, 5, 0, menu_modeChanged, false);
-  menu->AddValue(0, 6, 3, 6, 2, menu_setValueChanged);
-  menu->AddGoToPage(1, "Settings", 0, 3);
+  cmi = menu->AddMultiChoice(working_modes, WORKINGMODE_COUNT, 4, 0, menu_modeChanged, false);
+  setValueMenuItem = menu->AddValue(0, 6, 3, 0, 2, menu_setValueChanged);
+  setValueMenuItem->SetPrefix("Set:");
+  setValueMenuItem->SetSuffix("A");
+
+  menu->AddGoToPage(1, "[Conf]", 14, 2);
   //Page 1: Settings
   menu->AddPage();
   menu->AddGoToPage(0, "[Main]", 0, 0);
-  menu->AddMultiChoice(onOffChoices, 2, 10, 1, menu_BackLightChanged, true);
-  menu->AddGoToPage(2, "Fan & Temp", 0, 2);
+  cmi = menu->AddMultiChoice(onOffChoices, 2, 0, 1, menu_BackLightChanged, true);
+  cmi->SetPrefix("Backlight   :");
+
+  vmi = menu->AddValue(r17Resistance, 5, 1, 0, 2, menu_R17Changed);
+  vmi->SetPrefix("R17 Value   :");
+  vmi->SetSuffix("m\xF4");
+  cmi = menu->AddMultiChoice(battTypes, 2, 0, 3, menu_BattTypeChanged, true);
+  cmi->SetPrefix("Battery Type:");
+  vmi = menu->AddValue(battCellCutOut, 4, 1, 0, 4, menu_cutOffChanged);
+  vmi->SetPrefix("Batt Cut Off:");
+  vmi->DigitIndex = 1;
+  vmi = menu->AddValue(battCellCount, 1, 0, 0, 5, menu_battCellCountChanged);
+  vmi->SetPrefix("Cell Count  :");
+  menu->AddGoToPage(2, "[Fan & Temp]", 0, 6);
+
   //Page 2: Fan Management
   menu->AddPage();
   menu->AddGoToPage(1, "[Settings]", 0, 0);
-  MultiDigitValueMenuItem *vmi;
-  vmi = menu->AddValue(fanOnTemp[0], 4, 1, 10, 1, menu_FanOnTemp1Changed);
+  vmi = menu->AddValue(fanOnTemp[0], 4, 1, 0, 1, menu_FanOnTemp1Changed);
+  vmi->SetPrefix("Level 1   :");
   vmi->DigitIndex = 1;
-  vmi = menu->AddValue(fanOnTemp[1], 4, 1, 10, 2, menu_FanOnTemp2Changed);
+  vmi = menu->AddValue(fanOnTemp[1], 4, 1, 0, 2, menu_FanOnTemp2Changed);
+  vmi->SetPrefix("Level 2   :");
   vmi->DigitIndex = 1;
-  vmi = menu->AddValue(fanHysteresis, 3, 1, 10, 3, menu_FanHysteresisChanged);
+  vmi = menu->AddValue(fanHysteresis, 3, 1, 0, 3, menu_FanHysteresisChanged);
+  vmi->SetPrefix("Hysteresis:");
   vmi->DigitIndex = 1;
-  //menu->AddMultiChoice(onOffChoices, 2, 10, 4, menu_FanFeedbackChanged, true);
 
   menu->Configure(&lcd1, menu_pageChanged);
 }
@@ -253,11 +290,13 @@ void setOut()
     uint16_t newDacValue = setValues[workingMode];
     dac.setValue(newDacValue);
     digitalWrite(P_LOADON_LED, HIGH);
+    lcd_refresh_mask |= UM_LOAD_ONOFF;
   }
   else
   {
     dac.setValue(0);
     digitalWrite(P_LOADON_LED, LOW);
+    lcd_refresh_mask |= UM_LOAD_ONOFF;
   }
 }
 
@@ -304,7 +343,16 @@ void refreshDisplay()
       lcd_refresh_mask &= ~UM_POWER;
       menu->PrintCursor();
     }
-    roundRobin = (roundRobin + 1) % 4;
+    //Load On Off
+    if (lcd_refresh_mask & UM_LOAD_ONOFF && roundRobin == 4)
+    {
+      lcd1.setCursor(0, 0);
+      lcd1.print("O");
+      lcd1.print(onOff ? "n :" : "ff:");
+      lcd_refresh_mask &= ~UM_LOAD_ONOFF;
+    }
+
+    roundRobin = (roundRobin + 1) % 5;
   }
 
   drawStats.add(micros() - loopStart);
@@ -371,7 +419,7 @@ void selfTest()
   Serial.println(selfTestResult & 0x04 ? "RTC NOK" : "RTC OK");
 
   //Check IOX
-  lcd1.print("IOX:");
+  lcd1.print("  IOX:");
   Wire.beginTransmission(IOE_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
@@ -507,7 +555,6 @@ Statistic loopStats;
 void setup()
 {
   Serial.begin(9600);
-  Serial.print("Hello");
 
   // initialize the lcd
   lcd1.begin(20, 4);
@@ -515,6 +562,8 @@ void setup()
   lcd1.createChar(0, fanLevel1B);
   lcd1.createChar(1, fanLevel2B);
   lcd1.createChar(2, fanLevel3B);
+
+  //memset((void *)mode_units[1], 0xF4, 1);
 
   pinMode(P_LM35, INPUT);
   pinMode(P_FAN, OUTPUT);
@@ -529,8 +578,12 @@ void setup()
   encoder->setDoubleClickEnabled(false);
   encoder->setHoldTime(500);
 
-  //Setup Load button
+//Setup Load button
+#ifdef DEBUG_BOARD
+  pushButton = new OneButton(P_LOADON_BTN, 1, true);
+#else
   pushButton = new OneButton(P_LOADON_BTN, 0, false);
+#endif
   pushButton->setClickTicks(400);
   pushButton->setPressTicks(600);
   pushButton->attachClick(loadButton_click);
@@ -545,6 +598,9 @@ void setup()
   dac.setValue(1);
   dac.setValue(0);
   setOut();
+
+  _rtc.startClock();
+  _rtc.setSQW(RTCx::freq32768Hz);
 
   Wire.setClock(400000); //Done after dac.Begin as it itself setClock to 100.000
 
@@ -564,6 +620,16 @@ void loop()
   performReadings();
   adjustFanSpeed();
   refreshDisplay();
+
+  struct RTCx::tm tm;
+  static unsigned long lastRtcRead = 0;
+  if (millis() - lastRtcRead > 500)
+  {
+    _rtc.readClock(tm);
+    RTCx::time_t t = RTCx::mktime(&tm);
+    //Serial.println(t);
+    lastRtcRead = millis();
+  }
 
   //Encoder mgmnt
   int16_t enc = encoder->getValue();

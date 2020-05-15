@@ -32,7 +32,7 @@ void Menu::AddPage()
     this->_pageFirstIndexes[_currentPage] = this->_currentItem;
     this->_currentPage++;
 }
-void Menu::Configure(LiquidCrystal_PCF8574 *lcd, void (*onPageChange)(uint8_t))
+void Menu::Configure(LiquidCrystal_PCF8574 *lcd, void (*onPageChange)(uint8_t, uint8_t))
 {
     this->_onPageChange = onPageChange;
     this->_pageFirstIndexes[_currentPage] = _currentItem;
@@ -40,7 +40,7 @@ void Menu::Configure(LiquidCrystal_PCF8574 *lcd, void (*onPageChange)(uint8_t))
     this->_currentItem = 0;
     this->_selected = false;
     this->_lcd = lcd;
-    this->_onPageChange(this->_currentPage);
+    this->_onPageChange(this->_currentPage, 0);
     this->Print();
     this->PrintCursor();
 }
@@ -58,17 +58,33 @@ void Menu::EncoderInc(int8_t steps)
     }
     else
     {
-        this->_currentItem += steps;
-        if (this->_currentItem < this->_pageFirstIndexes[this->_currentPage])
-            this->_currentItem = this->_pageFirstIndexes[this->_currentPage];
-        else if (this->_currentItem >= this->_pageFirstIndexes[this->_currentPage + 1])
-            this->_currentItem = this->_pageFirstIndexes[this->_currentPage + 1] - 1;
+        //! This assumes menu items are sorted along Y axis in the array
+        _currentItem += steps;
+        if (_currentItem < _pageFirstIndexes[_currentPage])
+            _currentItem = _pageFirstIndexes[_currentPage];
+        else if (_currentItem >= _pageFirstIndexes[_currentPage + 1])
+            _currentItem = _pageFirstIndexes[_currentPage + 1] - 1;
+
+        uint8_t nsl = _scrollLevel;
+        if (steps > 0 && _menuItems[_currentItem]->cursorY - _scrollLevel > 3)
+            nsl = _scrollLevel + 1;
+        else if (_menuItems[_currentItem]->cursorY - _scrollLevel < 0)
+            nsl = _scrollLevel - 1;
+
+        if (nsl != _scrollLevel)
+        {
+            Serial.print("New Scroll Level:");
+            Serial.println(_scrollLevel);
+            _scrollLevel = nsl;
+            _lcd->clear();
+            this->Print();
+        }
         this->PrintCursor();
     }
 }
 void Menu::Click()
 {
-    MenuItem *mi = this->_menuItems[this->_currentItem];
+    MenuItem *mi = _menuItems[this->_currentItem];
     bool focus = _selected;
     uint8_t page = _currentPage;
     bool refresh = mi->Click(&focus, &page);
@@ -76,9 +92,10 @@ void Menu::Click()
 
     if (page != _currentPage)
     {
-        this->_currentPage = page;
-        this->_currentItem = this->_pageFirstIndexes[this->_currentPage];
-        this->_onPageChange(this->_currentPage);
+        _currentPage = page;
+        _scrollLevel = 0;
+        _currentItem = _pageFirstIndexes[_currentPage];
+        this->_onPageChange(_currentPage, _scrollLevel);
     }
 
     if (refresh)
@@ -95,21 +112,36 @@ void Menu::LongClick()
 
 void Menu::Print()
 {
+    MenuItem *mi;
     for (int i = this->_pageFirstIndexes[this->_currentPage]; i < this->_pageFirstIndexes[this->_currentPage + 1]; i++)
     {
-        this->PrintItem(this->_menuItems[i]);
+        mi = _menuItems[i];
+        if (mi->cursorY >= _scrollLevel && mi->cursorY - _scrollLevel < 4)
+            this->PrintItem(this->_menuItems[i]);
     }
     this->PrintCursor();
 }
 
 void Menu::PrintItem(MenuItem *mi)
 {
-    this->_lcd->setCursor(mi->cursorX, mi->cursorY);
-    mi->Print(_lcd);
+    _lcd->setCursor(mi->cursorX, mi->cursorY - _scrollLevel);
+    _lcd->print(mi->GetPrefix());
+    _lcd->print(mi->GetLabel());
+    _lcd->print(mi->GetSufix());
 }
 
 void Menu::PrintCursor()
 {
     MenuItem *mi = this->_menuItems[this->_currentItem];
-    mi->PrintCursor(_lcd, _selected);
+    _lcd->setCursor(mi->cursorX + mi->GetCursorOffset(_selected), mi->cursorY - _scrollLevel);
+    if (mi->GetCursorType(_selected) == MenuItem::cursorType::Normal)
+    {
+        _lcd->noBlink();
+        _lcd->cursor();
+    }
+    else
+    {
+        _lcd->noCursor();
+        _lcd->blink();
+    }
 }

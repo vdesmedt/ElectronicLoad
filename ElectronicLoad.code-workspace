@@ -12,5 +12,9 @@
       "path": "/Users/vdesmedt/Documents/PlatformIO/Projects/ATTinyTest"
     }
   ],
-  "settings": {}
+  "settings": {
+    "files.associations": {
+      "limits": "cpp"
+    }
+  }
 }

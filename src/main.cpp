@@ -1,4 +1,4 @@
-#define DEBUG_BOARD
+#define DEBUG_BOARD_
 
 #include <Wire.h>
 #include <Arduino.h>
@@ -14,26 +14,7 @@
 #include <Statistic.h>
 #include <Filters/SMA.hpp>
 #include <specialLcdChar.h>
-
-//BEGIN - PIN ATTRIBUTION ###
-#ifdef DEBUG_BOARD
-#define P_ENC1 4
-#define P_ENC2 3
-#define P_ENCBTN 5
-#define P_LOADON_BTN 8
-#define P_LOADON_LED 7
-#define P_LM35 A6
-#define P_FAN 6
-#else
-#define P_ENC1 4
-#define P_ENC2 3
-#define P_ENCBTN 7
-#define P_LOADON_BTN 6
-#define P_LOADON_LED 9
-#define P_LM35 A6
-#define P_FAN 5
-#endif
-//END - PIN ATTRIBUTION ###
+#include "pindef.h"
 
 //BEGIN ADC-DAC
 #ifdef DEBUG_BOARD
@@ -53,19 +34,18 @@ RTCx _rtc(RTC_ADDR);
 
 //BEGIN - LCD ###
 LiquidCrystal_PCF8574 lcd1(0x27);
-int backlight = 0;
-#define LCD_READING_MAX_UPDATE_RATE 200
-#define LCD_TEMP_MAX_UPDATE_RATE 500
+#define LCD_TEMP_MAX_UPDATE_RATE 200
 #define UM_TEMP 1 << 0
 #define UM_VOLTAGE 1 << 1
 #define UM_CURRENT 1 << 2
 #define UM_POWER 1 << 3
 #define UM_LOAD_ONOFF 1 << 4
-uint8_t lcd_refresh_mask = 255;
+int lcdRefreshMask = ~0;
+
 #define WORKINGMODE_COUNT 4
 const char *working_modes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "BA"};
-const char *onOffChoices[] = {"On", "Off"};
-const char *mode_units[WORKINGMODE_COUNT] = {"A", "O", "W", "A"};
+const char *onOffChoices[] = {"On ", "Off"};
+const char *modeUnits[WORKINGMODE_COUNT] = {"A", "O", "W", "A"};
 #define BATT_TYPE_COUNT 2
 const char *battTypes[BATT_TYPE_COUNT] = {"Lipo", "NiMh"};
 Menu *menu;
@@ -88,13 +68,14 @@ uint8_t battCellCutOut = 32; // 1/10 V
 uint8_t battCellCount = 1;
 uint8_t workingMode = 0;
 int16_t setValues[WORKINGMODE_COUNT] = {0, 0, 0, 0};
-uint16_t read_temp = 0; // 1/10 °C
 uint8_t fanLevel = 0;
 uint16_t fanOnTemp[] = {300, 400};
 uint8_t fanHysteresis = 20;
-int16_t read_current = 0; // mA
-int16_t read_voltage = 0; // mV
-bool onOff = false;
+
+uint16_t readTemperature = 0; // 1/10 °C
+int16_t readCurrent = 0;      // mA
+int16_t readVoltage = 0;      // mV
+bool swLoadOnOff = false;
 //END - Load ###
 
 OneButton *pushButton;
@@ -104,7 +85,7 @@ bool menu_modeChanged(int32_t newMode);
 bool menu_setValueChanged(int32_t newValue);
 void menu_pageChanged(uint8_t newPageIndex);
 void setupMenu();
-void setOut();
+void setOutput();
 void refreshDisplay();
 void loadButton_click();
 void loadButton_longClick();
@@ -112,17 +93,13 @@ void selfTest();
 void setupLoadButton();
 void setupLoadButton();
 
-void timerIsr()
-{
-  encoder->service();
-}
-
 bool menu_modeChanged(int8_t newMode)
 {
   Serial.print("New mode:");
   Serial.println(newMode);
   workingMode = newMode;
-  setValueMenuItem->SetSuffix(mode_units[newMode]);
+  setValueMenuItem->SetValue(setValues[workingMode]);
+  setValueMenuItem->SetSuffix(modeUnits[newMode]);
   menu->PrintItem(setValueMenuItem);
   return true;
 }
@@ -134,7 +111,7 @@ bool menu_setValueChanged(int32_t newValue)
   if (newValue > 30000)
     return false;
   setValues[workingMode] = newValue;
-  setOut();
+  setOutput();
   return true;
 }
 
@@ -144,18 +121,17 @@ void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
   switch (newPageIndex)
   {
   case 0:
-    lcd1.setCursor(17, 0);
+    lcd1.setCursor(18, 0);
     lcd1.print((char)0xDF);
-    lcd1.print("C");
 
     lcd1.setCursor(5, 1);
     lcd1.print("A");
-    lcd1.setCursor(12, 1);
+    lcd1.setCursor(13, 1);
     lcd1.print("V");
     lcd1.setCursor(19, 1);
     lcd1.print("W");
 
-    lcd_refresh_mask = 0xFF;
+    lcdRefreshMask = ~0;
     break;
   }
 }
@@ -202,7 +178,13 @@ bool menu_FanHysteresisChanged(int32_t newValue)
 
 bool menu_R17Changed(int32_t newValue)
 {
-  return true;
+  if (newValue > 900 && newValue < 1100)
+  {
+    r17Resistance = newValue;
+    setOutput();
+    return true;
+  }
+  return false;
 }
 
 bool menu_BattTypeChanged(int8_t newValue)
@@ -283,20 +265,25 @@ void setupMenu()
   menu->Configure(&lcd1, menu_pageChanged);
 }
 
-void setOut()
+void timerIsr()
 {
-  if (onOff)
+  encoder->service();
+}
+
+void setOutput()
+{
+  if (swLoadOnOff)
   {
-    uint16_t newDacValue = setValues[workingMode];
+    uint16_t newDacValue = round((double)setValues[workingMode] * (double)r17Resistance / 1000.0);
     dac.setValue(newDacValue);
     digitalWrite(P_LOADON_LED, HIGH);
-    lcd_refresh_mask |= UM_LOAD_ONOFF;
+    lcdRefreshMask |= UM_LOAD_ONOFF;
   }
   else
   {
     dac.setValue(0);
     digitalWrite(P_LOADON_LED, LOW);
-    lcd_refresh_mask |= UM_LOAD_ONOFF;
+    lcdRefreshMask |= UM_LOAD_ONOFF;
   }
 }
 
@@ -306,53 +293,51 @@ void refreshDisplay()
   static unsigned long loopStart = 0;
   loopStart = micros();
 
-  static uint8_t roundRobin = 0;
   static char buffer[10];
   if (menu->GetCurrentPage() == 0)
   {
     //Temp
-    if (lcd_refresh_mask & UM_TEMP && roundRobin == 0)
+    if (lcdRefreshMask & UM_TEMP)
     {
       lcd1.setCursor(13, 0);
-      lcd1.print(dtostrf((double)read_temp / 10, 3, 1, buffer));
+      lcd1.print(dtostrf((double)readTemperature / 10, 5, 1, buffer));
       lcd1.setCursor(19, 0);
-      lcd1.write(fanLevel);
-      lcd_refresh_mask &= ~UM_TEMP;
+      lcd1.write(SC_THERMO_L0 + fanLevel);
+      lcdRefreshMask &= ~UM_TEMP;
       menu->PrintCursor();
     }
 
     //Readings
-    if (lcd_refresh_mask & UM_CURRENT && roundRobin == 1)
+    if (lcdRefreshMask & UM_CURRENT)
     {
       lcd1.setCursor(0, 1);
-      lcd1.print(dtostrf((double)read_current / 1000, 5, 3, buffer));
-      lcd_refresh_mask &= ~UM_CURRENT;
+      lcd1.print(dtostrf((double)readCurrent / 1000, 5, 3, buffer));
+      Serial.println("Update Current on LCD");
+      lcdRefreshMask &= ~UM_CURRENT;
       menu->PrintCursor();
     }
-    if (lcd_refresh_mask & UM_VOLTAGE && roundRobin == 2)
+    if (lcdRefreshMask & UM_VOLTAGE)
     {
       lcd1.setCursor(7, 1);
-      lcd1.print(dtostrf((double)read_voltage / 1000, 5, 3, buffer));
-      lcd_refresh_mask &= ~UM_VOLTAGE;
+      lcd1.print(dtostrf((double)readVoltage / 1000, 5, 3, buffer));
+      lcdRefreshMask &= ~UM_VOLTAGE;
       menu->PrintCursor();
     }
-    if (lcd_refresh_mask & UM_POWER && roundRobin == 3)
+    if (lcdRefreshMask & UM_POWER)
     {
-      lcd1.setCursor(14, 1);
-      lcd1.print(dtostrf((double)read_voltage * read_current / 1000000, 5, 3, buffer));
-      lcd_refresh_mask &= ~UM_POWER;
+      lcd1.setCursor(15, 1);
+      lcd1.print(dtostrf((double)readVoltage * readCurrent / 1000000, 4, 1, buffer));
+      lcdRefreshMask &= ~UM_POWER;
       menu->PrintCursor();
     }
     //Load On Off
-    if (lcd_refresh_mask & UM_LOAD_ONOFF && roundRobin == 4)
+    if (lcdRefreshMask & UM_LOAD_ONOFF)
     {
       lcd1.setCursor(0, 0);
-      lcd1.print("O");
-      lcd1.print(onOff ? "n :" : "ff:");
-      lcd_refresh_mask &= ~UM_LOAD_ONOFF;
+      lcd1.print(swLoadOnOff ? "On :" : "Off:");
+      lcdRefreshMask &= ~UM_LOAD_ONOFF;
+      menu->PrintCursor();
     }
-
-    roundRobin = (roundRobin + 1) % 5;
   }
 
   drawStats.add(micros() - loopStart);
@@ -373,8 +358,8 @@ void refreshDisplay()
 void loadButton_click()
 {
   Serial.println("Load CLick");
-  onOff = !onOff;
-  setOut();
+  swLoadOnOff = !swLoadOnOff;
+  setOutput();
 }
 
 void loadButton_longClick()
@@ -385,7 +370,7 @@ void selfTest()
 {
   uint8_t selfTestResult = 0;
   lcd1.home();
-  lcd1.print("= Electronic  Load =");
+  lcd1.print(F("= Electronic  Load ="));
 
   //Check ADC Presence
   lcd1.setCursor(0, 1);
@@ -434,13 +419,13 @@ void selfTest()
     delay(2000);
 
   //Booting
-  Serial.println("Self test done");
+  Serial.println(F("Self test done"));
 }
 
 //TODO : Auto Gain adjustment : For low voltage, 4x will increase resolution
 //TODO : Switch to continuous convertion
 SMA<10, uint16_t, uint32_t> temperatureSMA;
-void performReadings()
+void actuateReadings()
 {
   static MCP342x::Config ch1Config(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1);
   static MCP342x::Config ch2Config(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain4);
@@ -450,14 +435,13 @@ void performReadings()
   static int8_t runConvertCh = 1;
 
   //Temperature Reading
-  static uint8_t rawTemp;
-  rawTemp = temperatureSMA(analogRead(P_LM35));
-  read_temp = rawTemp * 4.83871;
-  static unsigned long lastTemperatureLcdUpdate = 0;
-  if (lastTemperatureLcdUpdate + LCD_TEMP_MAX_UPDATE_RATE < millis())
+
+  static unsigned long lastTempRead = 0;
+  if (lastTempRead + LCD_TEMP_MAX_UPDATE_RATE < millis())
   {
-    lcd_refresh_mask |= UM_TEMP;
-    lastTemperatureLcdUpdate = millis();
+    readTemperature = temperatureSMA(analogRead(P_LM35)) * 4.83871;
+    lcdRefreshMask |= UM_TEMP;
+    lastTempRead = millis();
   }
 
   //Voltage & Current Reading (alternate)
@@ -466,9 +450,8 @@ void performReadings()
     adcErr = adc.convert(ch1Config);
     if (adcErr)
     {
-      Serial.print("ADC-Ch1 Err:");
+      Serial.print("ADC-Ch1 Conv Err:");
       Serial.println(adcErr);
-      delay(1000);
     }
     runConvertCh = -1;
   }
@@ -477,9 +460,8 @@ void performReadings()
     adcErr = adc.convert(ch2Config);
     if (adcErr)
     {
-      Serial.print("ADC-Ch2 Err:");
+      Serial.print("ADC-Ch2 Conv Err:");
       Serial.println(adcErr);
-      delay(1000);
     }
     runConvertCh = -2;
   }
@@ -488,20 +470,27 @@ void performReadings()
   {
     static int16_t newVoltage = 0;
     adcErr = adc.read(adcValue, adcStatus);
-    if (!adcErr && adcStatus.isReady())
+    if (adcStatus.isReady())
     {
-      newVoltage = adcValue * (2048.0 / 32768) * 50;
-      if (newVoltage != read_voltage)
+      if (adcErr)
       {
-        read_voltage = newVoltage;
-        static unsigned long lastVoltageLcdUpdate = 0;
-        if (lastVoltageLcdUpdate + LCD_READING_MAX_UPDATE_RATE < millis())
-        {
-          lcd_refresh_mask |= (UM_VOLTAGE | UM_POWER);
-          lastVoltageLcdUpdate = millis();
-        }
+        Serial.print("ADC-Ch1 Read Err:");
+        Serial.println(adcErr);
       }
-      runConvertCh = 2;
+      else
+      {
+        if (adcValue < 0)
+          adcValue = 0;
+        newVoltage = adcValue * (2048.0 / 32768) * 50;
+        if (newVoltage != readVoltage)
+        {
+          readVoltage = newVoltage;
+          Serial.print("New Voltage:");
+          Serial.println(newVoltage);
+          lcdRefreshMask |= (UM_VOLTAGE | UM_POWER);
+        }
+        runConvertCh = 2;
+      }
     }
   }
 
@@ -509,20 +498,27 @@ void performReadings()
   {
     static int16_t newCurrent = 0;
     adcErr = adc.read(adcValue, adcStatus);
-    if (!adcErr && adcStatus.isReady())
+    if (adcStatus.isReady())
     {
-      newCurrent = adcValue * (2048.0 / 32768) * 2.5;
-      if (newCurrent != read_current)
+      if (adcErr)
       {
-        read_current = newCurrent;
-        static unsigned long lastCurrentLcdUpdate = 0;
-        if (lastCurrentLcdUpdate + LCD_READING_MAX_UPDATE_RATE < millis())
-        {
-          lcd_refresh_mask |= (UM_CURRENT | UM_POWER);
-          lastCurrentLcdUpdate = millis();
-        }
+        Serial.print("ADC-Ch2 Read Err:");
+        Serial.println(adcErr);
       }
-      runConvertCh = 1;
+      else
+      {
+        if (adcValue < 0)
+          adcValue = 0;
+        newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / r17Resistance);
+        if (newCurrent != readCurrent)
+        {
+          readCurrent = newCurrent;
+          Serial.print("New Current:");
+          Serial.println(newCurrent);
+          lcdRefreshMask |= (UM_CURRENT | UM_POWER);
+        }
+        runConvertCh = 1;
+      }
     }
   }
 }
@@ -534,17 +530,17 @@ void adjustFanSpeed()
   switch (fanLevel)
   {
   case 0:
-    if (read_temp > fanOnTemp[0] + fanHysteresis)
+    if (readTemperature > fanOnTemp[0] + fanHysteresis)
       fanLevel = 1;
     break;
   case 1:
-    if (read_temp < fanOnTemp[0] - fanHysteresis)
+    if (readTemperature < fanOnTemp[0] - fanHysteresis)
       fanLevel = 0;
-    else if (read_temp > fanOnTemp[1] + fanHysteresis)
+    else if (readTemperature > fanOnTemp[1] + fanHysteresis)
       fanLevel = 2;
     break;
   case 2:
-    if (read_temp < fanOnTemp[1] - fanHysteresis)
+    if (readTemperature < fanOnTemp[1] - fanHysteresis)
       fanLevel = 1;
     break;
   }
@@ -559,11 +555,12 @@ void setup()
   // initialize the lcd
   lcd1.begin(20, 4);
   lcd1.setBacklight(255);
-  lcd1.createChar(0, fanLevel1B);
-  lcd1.createChar(1, fanLevel2B);
-  lcd1.createChar(2, fanLevel3B);
+  lcd1.createChar(SC_THERMO_L0, thermo_l0);
+  lcd1.createChar(SC_THERMO_L1, thermo_l1);
+  lcd1.createChar(SC_THERMO_L2, thermo_l2);
+  lcd1.createChar(SC_THERMO_L3, thermo_l3);
 
-  //memset((void *)mode_units[1], 0xF4, 1);
+  memset((void *)modeUnits[1], 0xF4, 1);
 
   pinMode(P_LM35, INPUT);
   pinMode(P_FAN, OUTPUT);
@@ -597,7 +594,7 @@ void setup()
   dac.begin();
   dac.setValue(1);
   dac.setValue(0);
-  setOut();
+  setOutput();
 
   _rtc.startClock();
   _rtc.setSQW(RTCx::freq32768Hz);
@@ -617,7 +614,7 @@ void loop()
 
   loopStart = micros();
   pushButton->tick();
-  performReadings();
+  actuateReadings();
   adjustFanSpeed();
   refreshDisplay();
 

@@ -95,12 +95,12 @@ void setupLoadButton();
 
 bool menu_modeChanged(int8_t newMode)
 {
-  Serial.print("New mode:");
-  Serial.println(newMode);
   workingMode = newMode;
   setValueMenuItem->SetValue(setValues[workingMode]);
   setValueMenuItem->SetSuffix(modeUnits[newMode]);
   menu->PrintItem(setValueMenuItem);
+  swLoadOnOff = false;
+  setOutput();
   return true;
 }
 

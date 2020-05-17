@@ -7,7 +7,7 @@
 class MultiChoiceMenuItem : public MenuItem
 {
 public:
-    MultiChoiceMenuItem(const char *choices[], uint8_t choicesCount, uint8_t cursorX, uint8_t cursorY, bool (*onChange)(int8_t) = NULL) : MenuItem(MultiChoice, cursorX, cursorY)
+    MultiChoiceMenuItem(const char *choices[], uint8_t choicesCount, uint8_t cursorX, uint8_t cursorY, bool (*onChange)(int8_t) = NULL) : MenuItem(cursorX, cursorY)
     {
         _choices = (char **)choices;
         _choiceCount = choicesCount;

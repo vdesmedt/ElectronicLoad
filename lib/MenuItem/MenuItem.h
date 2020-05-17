@@ -10,20 +10,13 @@
 class MenuItem
 {
 public:
-    enum menuItemType
-    {
-        MultiChoice,
-        MultiDigitValue,
-        GoToPage,
-    };
-
     enum cursorType
     {
         Normal,
         Blink,
     };
 
-    MenuItem(enum menuItemType type, uint8_t cursorX, uint8_t cursorY);
+    MenuItem(uint8_t cursorX, uint8_t cursorY);
     void SetPrefix(const char *prefix)
     {
         _prefix = prefix;
@@ -35,7 +28,6 @@ public:
         _updateMask |= UM_SUFFIX;
     }
 
-    enum menuItemType GetType() { return this->_menuType; }
     virtual const char *GetPrefix() { return _prefix ? _prefix : ""; }
     virtual const char *GetSufix() { return _suffix ? _suffix : ""; }
     virtual const char *GetLabel() = 0;
@@ -51,7 +43,6 @@ public:
     uint8_t cursorY = 0;
 
 protected:
-    enum menuItemType _menuType;
     const char *_prefix = NULL;
     const char *_suffix = NULL;
     uint8_t _updateMask = 0;

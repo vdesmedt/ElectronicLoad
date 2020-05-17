@@ -7,7 +7,7 @@
 class MultiDigitValueMenuItem : public MenuItem
 {
 public:
-    MultiDigitValueMenuItem(int32_t initialValue, uint8_t length, uint8_t precision, uint8_t cursorX, uint8_t cursorY, bool (*onChange)(int32_t) = NULL) : MenuItem(MultiDigitValue, cursorX, cursorY)
+    MultiDigitValueMenuItem(int32_t initialValue, uint8_t length, uint8_t precision, uint8_t cursorX, uint8_t cursorY, bool (*onChange)(int32_t) = NULL) : MenuItem(cursorX, cursorY)
     {
         this->_value = initialValue;
         this->_lenght = length;
@@ -28,6 +28,7 @@ public:
     }
     int32_t GetValue() { return this->_value; }
     uint8_t GetPrecision() { return this->_precision; }
+    void SetPrecision(int32_t precision) { _precision = precision; }
     bool AllowNeg = false;
     uint8_t DigitIndex = 0;
 

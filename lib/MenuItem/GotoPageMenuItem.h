@@ -7,7 +7,7 @@
 class GoToPageMenuItem : public MenuItem
 {
 public:
-    GoToPageMenuItem(const char *title, uint8_t destinationPageIndex, uint8_t cursorX, uint8_t cursorY) : MenuItem(GoToPage, cursorX, cursorY)
+    GoToPageMenuItem(const char *title, uint8_t destinationPageIndex, uint8_t cursorX, uint8_t cursorY) : MenuItem(cursorX, cursorY)
     {
         _title = title;
         targetPageIndex = destinationPageIndex;

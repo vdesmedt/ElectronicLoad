@@ -1,13 +1,13 @@
 #define DEBUG_BOARD_
 #define DEBUG_TIMINGS true
 
+#define MCP4725_EXTENDED
 #include <Wire.h>
 #include <Arduino.h>
 #include <ClickEncoder.h>
 #include <OneButton.h>
 #include <TimerOne.h>
 #include <LiquidCrystal_PCF8574.h>
-#define MCP4725_EXTENDED ON
 #include <MCP4725.h>
 #include <MCP342x.h>
 #include <RTCx.h>
@@ -59,10 +59,10 @@ MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
 
 //BEGIN Flash
 #define FLASH_ADR 0x20000 //First memory availble after reserved for OTA update
-#define FLASH_VERSION 0x02
+#define SETTINGS_VERSION 0x03
 struct Settings
 {
-  uint8_t version = (FLASH_VERSION << 1) + 0;                 //LSB to 1 means dirty
+  uint8_t version = (SETTINGS_VERSION << 1) + 0;              //LSB to 1 means dirty
   uint8_t mode = 0;                                           //CC
   uint16_t setValues[WORKINGMODE_COUNT] = {0, 1000, 50, 100}; //0mA 100Ω, 5W, 100mA
   uint8_t backlight = 0;                                      //On
@@ -680,12 +680,15 @@ void setup()
 
   //Load Settings from Flash
   flash.readBytes(FLASH_ADR, settings, sizeof(Settings));
-  if ((settings->version >> 1) != FLASH_VERSION)
+  if ((settings->version >> 1) != SETTINGS_VERSION)
   {
-    debug_printa("Setting Ver NoMatch %X vs %X\n", settings->version >> 1, FLASH_VERSION);
+    debug_printa("Setting Ver NoMatch %X vs %X\n", settings->version >> 1, SETTINGS_VERSION);
     free(settings);
     settings = new Settings();
-    Serial.println(settings->r17Value);
+    //Enjoy this first booting time to setup DAC POR Value (1/2 ref voltage out of factory)
+    dac.writeDAC(0, true);
+    while (!dac.RDY())
+      ;
   }
   SetBacklight();
 

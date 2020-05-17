@@ -1,4 +1,5 @@
 #define DEBUG_BOARD_
+#define DEBUG_TIMINGS true
 
 #include <Wire.h>
 #include <Arduino.h>
@@ -13,6 +14,8 @@
 #include <Menu.h>
 #include <Statistic.h>
 #include <Filters/SMA.hpp>
+#include <MemoryFree.h>
+#include <debug.h>
 #include <specialLcdChar.h>
 #include "pindef.h"
 

@@ -14,6 +14,7 @@
 #include <Menu.h>
 #include <Statistic.h>
 #include <Filters/SMA.hpp>
+#include <SPIFlash.h>
 #include <MemoryFree.h>
 #include <debug.h>
 #include <specialLcdChar.h>
@@ -46,14 +47,35 @@ LiquidCrystal_PCF8574 lcd1(0x27);
 int lcdRefreshMask = ~0;
 
 #define WORKINGMODE_COUNT 4
-const char *working_modes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "BA"};
+const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "BA"};
 const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "O", "W", "A"};
 #define BATT_TYPE_COUNT 2
 const char *battTypes[BATT_TYPE_COUNT] = {"Lipo", "NiMh"};
 Menu *menu;
 MultiDigitValueMenuItem *setValueMenuItem = NULL;
+MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
 //END - LCD ###
+
+//BEGIN Flash
+#define FLASH_ADR 0x20000 //First memory availble after reserved for OTA update
+#define FLASH_VERSION 0x02
+struct Settings
+{
+  uint8_t version = (FLASH_VERSION << 1) + 0;                 //LSB to 1 means dirty
+  uint8_t mode = 0;                                           //CC
+  uint16_t setValues[WORKINGMODE_COUNT] = {0, 1000, 50, 100}; //0mA 100Ω, 5W, 100mA
+  uint8_t backlight = 0;                                      //On
+  uint16_t r17Value = 1000;                                   //100mΩ
+  uint8_t battType = 0;                                       //Lipo
+  uint16_t battCutOff[2] = {32, 10};                          //3.2V 1.0V
+  uint16_t fanTemps[3] = {300, 400, 600};                     //30°C
+  uint8_t fanHysteresis = 10;                                 //1°C
+};
+struct Settings *settings = new Settings();
+
+SPIFlash flash(P_FLASH_SS, 0xEF30);
+//END FLash
 
 //BEGIN - Encoder ###
 ClickEncoder *encoder;
@@ -65,16 +87,8 @@ ClickEncoder *encoder;
 //END - Encoder ###
 
 //BEGIN - Load ###
-uint16_t r17Resistance = 1000; // 1/10 mΩ
-uint8_t battType = 0;
-uint8_t battCellCutOut = 32; // 1/10 V
 uint8_t battCellCount = 1;
-uint8_t workingMode = 0;
-int16_t setValues[WORKINGMODE_COUNT] = {0, 0, 0, 0};
 uint8_t fanLevel = 0;
-uint16_t fanOnTemp[] = {300, 400};
-uint8_t fanHysteresis = 20;
-
 uint16_t readTemperature = 0; // 1/10 °C
 int16_t readCurrent = 0;      // mA
 int16_t readVoltage = 0;      // mV
@@ -84,26 +98,39 @@ bool swLoadOnOff = false;
 OneButton *pushButton;
 
 void timerIsr();
-bool menu_modeChanged(int32_t newMode);
-bool menu_setValueChanged(int32_t newValue);
-void menu_pageChanged(uint8_t newPageIndex);
 void setupMenu();
 void setOutput();
+void SetBacklight();
 void refreshDisplay();
 void loadButton_click();
 void loadButton_longClick();
 void selfTest();
 void setupLoadButton();
 void setupLoadButton();
+void SaveSettings();
 
 bool menu_modeChanged(int8_t newMode)
 {
-  workingMode = newMode;
-  setValueMenuItem->SetValue(setValues[workingMode]);
+  settings->mode = newMode;
+  setValueMenuItem->SetValue(settings->setValues[settings->mode]);
   setValueMenuItem->SetSuffix(modeUnits[newMode]);
+  switch (settings->mode)
+  {
+  case 0:
+  case 3:
+    setValueMenuItem->SetPrecision(3);
+    break;
+  case 1:
+    setValueMenuItem->SetPrecision(1);
+    break;
+  case 2:
+    setValueMenuItem->SetPrecision(1);
+    break;
+  }
   menu->PrintItem(setValueMenuItem);
   swLoadOnOff = false;
   setOutput();
+  settings->version |= 0x01;
   return true;
 }
 
@@ -113,7 +140,8 @@ bool menu_setValueChanged(int32_t newValue)
     return false;
   if (newValue > 30000)
     return false;
-  setValues[workingMode] = newValue;
+  settings->setValues[settings->mode] = newValue;
+  settings->version |= 0x01;
   setOutput();
   return true;
 }
@@ -135,35 +163,45 @@ void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
     lcd1.print("W");
 
     lcdRefreshMask = ~0;
+    SaveSettings();
     break;
   }
 }
 
 bool menu_BackLightChanged(int8_t newValue)
 {
-  lcd1.setBacklight(newValue ? 0 : 255);
-  return true;
-}
-
-bool menu_FanFeedbackChanged(int8_t newValue)
-{
+  settings->backlight = newValue;
+  settings->version |= 0x01;
+  SetBacklight();
   return true;
 }
 
 bool menu_FanOnTemp1Changed(int32_t newValue)
 {
-  if (newValue <= 600 && newValue >= 0)
+  if (newValue <= settings->fanTemps[1] && newValue >= 0)
   {
-    fanOnTemp[0] = newValue;
+    settings->fanTemps[0] = newValue;
+    settings->version |= 0x01;
     return true;
   }
   return false;
 }
 bool menu_FanOnTemp2Changed(int32_t newValue)
 {
-  if (newValue <= 600 && newValue >= 0)
+  if (newValue <= settings->fanTemps[2] && newValue >= settings->fanTemps[0])
   {
-    fanOnTemp[0] = newValue;
+    settings->fanTemps[1] = newValue;
+    settings->version |= 0x01;
+    return true;
+  }
+  return false;
+}
+bool menu_FanOnTemp3Changed(int32_t newValue)
+{
+  if (newValue <= 1000 && newValue >= settings->fanTemps[1])
+  {
+    settings->fanTemps[2] = newValue;
+    settings->version |= 0x01;
     return true;
   }
   return false;
@@ -173,8 +211,13 @@ bool menu_FanHysteresisChanged(int32_t newValue)
 {
   if (newValue >= 0 && newValue < 100)
   {
-    fanHysteresis = newValue;
+    settings->fanHysteresis = newValue;
+    settings->version |= 0x01;
     return true;
+  }
+  else if (newValue < 0 || newValue > 100)
+  {
+    settings->fanHysteresis = 10;
   }
   return false;
 }
@@ -183,7 +226,8 @@ bool menu_R17Changed(int32_t newValue)
 {
   if (newValue > 900 && newValue < 1100)
   {
-    r17Resistance = newValue;
+    settings->r17Value = newValue;
+    settings->version |= 0x01;
     setOutput();
     return true;
   }
@@ -194,7 +238,9 @@ bool menu_BattTypeChanged(int8_t newValue)
 {
   if (newValue >= 0 && newValue < BATT_TYPE_COUNT)
   {
-    battType = newValue;
+    settings->battType = newValue;
+    settings->version |= 0x01;
+    setBattCutOffMenuItem->SetValue(settings->battCutOff[settings->battType]);
     return true;
   }
   return false;
@@ -202,19 +248,10 @@ bool menu_BattTypeChanged(int8_t newValue)
 
 bool menu_cutOffChanged(int32_t newValue)
 {
-  if (newValue >= 0 && newValue <= 300)
+  if (newValue >= 0 && newValue <= 50)
   {
-    battCellCutOut = newValue;
-    return true;
-  }
-  return false;
-}
-
-bool menu_battCellCountChanged(int32_t newValue)
-{
-  if (newValue >= 1 && newValue <= 8)
-  {
-    battCellCount = newValue;
+    settings->battCutOff[settings->battType] = newValue;
+    settings->version |= 0x01;
     return true;
   }
   return false;
@@ -228,41 +265,52 @@ void setupMenu()
   menu = new Menu(3, 20);
   //Page 0: Main Page
   menu->AddPage();
-  cmi = menu->AddMultiChoice(working_modes, WORKINGMODE_COUNT, 4, 0, menu_modeChanged, false);
-  setValueMenuItem = menu->AddValue(0, 6, 3, 0, 2, menu_setValueChanged);
+  cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 4, 0, menu_modeChanged, false);
+  cmi->currentChoiceIndex = settings->mode;
+  setValueMenuItem = menu->AddValue(settings->setValues[settings->mode], 6, 3, 0, 2, menu_setValueChanged);
   setValueMenuItem->SetPrefix("Set:");
-  setValueMenuItem->SetSuffix("A");
+  setValueMenuItem->SetSuffix(modeUnits[settings->mode]);
 
   menu->AddGoToPage(1, "[Conf]", 14, 2);
   //Page 1: Settings
   menu->AddPage();
   menu->AddGoToPage(0, "[Main]", 0, 0);
   cmi = menu->AddMultiChoice(onOffChoices, 2, 0, 1, menu_BackLightChanged, true);
+  cmi->currentChoiceIndex = settings->backlight;
   cmi->SetPrefix("Backlight   :");
 
-  vmi = menu->AddValue(r17Resistance, 5, 1, 0, 2, menu_R17Changed);
+  vmi = menu->AddValue(settings->r17Value, 5, 1, 0, 2, menu_R17Changed);
   vmi->SetPrefix("R17 Value   :");
   vmi->SetSuffix("m\xF4");
   cmi = menu->AddMultiChoice(battTypes, 2, 0, 3, menu_BattTypeChanged, true);
   cmi->SetPrefix("Battery Type:");
-  vmi = menu->AddValue(battCellCutOut, 4, 1, 0, 4, menu_cutOffChanged);
-  vmi->SetPrefix("Batt Cut Off:");
-  vmi->DigitIndex = 1;
-  vmi = menu->AddValue(battCellCount, 1, 0, 0, 5, menu_battCellCountChanged);
-  vmi->SetPrefix("Cell Count  :");
-  menu->AddGoToPage(2, "[Fan & Temp]", 0, 6);
+  cmi->currentChoiceIndex = settings->battType;
+
+  setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 4, 1, 0, 4, menu_cutOffChanged);
+  setBattCutOffMenuItem->SetPrefix("Batt Cut Off:");
+  setBattCutOffMenuItem->SetSuffix("V");
+  setBattCutOffMenuItem->DigitIndex = 1;
+
+  menu->AddGoToPage(2, "[Fan & Temp]", 0, 5);
 
   //Page 2: Fan Management
   menu->AddPage();
   menu->AddGoToPage(1, "[Settings]", 0, 0);
-  vmi = menu->AddValue(fanOnTemp[0], 4, 1, 0, 1, menu_FanOnTemp1Changed);
-  vmi->SetPrefix("Level 1   :");
+  vmi = menu->AddValue(settings->fanTemps[0], 4, 1, 0, 1, menu_FanOnTemp1Changed);
+  vmi->SetPrefix("Level 1 :");
+  vmi->SetSuffix("\xDF\x43");
   vmi->DigitIndex = 1;
-  vmi = menu->AddValue(fanOnTemp[1], 4, 1, 0, 2, menu_FanOnTemp2Changed);
-  vmi->SetPrefix("Level 2   :");
+  vmi = menu->AddValue(settings->fanTemps[1], 4, 1, 0, 2, menu_FanOnTemp2Changed);
+  vmi->SetPrefix("Level 2 :");
+  vmi->SetSuffix("\xDF\x43");
   vmi->DigitIndex = 1;
-  vmi = menu->AddValue(fanHysteresis, 3, 1, 0, 3, menu_FanHysteresisChanged);
+  vmi = menu->AddValue(settings->fanTemps[2], 4, 1, 0, 3, menu_FanOnTemp3Changed);
+  vmi->SetPrefix("Cut Off :");
+  vmi->SetSuffix("\xDF\x43");
+  vmi->DigitIndex = 1;
+  vmi = menu->AddValue(settings->fanHysteresis, 3, 1, 0, 4, menu_FanHysteresisChanged);
   vmi->SetPrefix("Hysteresis:");
+  vmi->SetSuffix("\xDF\x43");
   vmi->DigitIndex = 1;
 
   menu->Configure(&lcd1, menu_pageChanged);
@@ -277,10 +325,30 @@ void setOutput()
 {
   if (swLoadOnOff)
   {
-    uint16_t newDacValue = round((double)setValues[workingMode] * (double)r17Resistance / 1000.0);
-    dac.setValue(newDacValue);
+    double newDacValue = 0; //Output in mV
+    double set = settings->setValues[settings->mode];
+    switch (settings->mode)
+    {
+    case 0: //CC
+    case 3: //Battery
+      newDacValue = set;
+      break;
+    case 1:                                           //CR
+      newDacValue = (double)readVoltage / (set / 10); //mV / Ω
+      break;
+    case 2: //CP
+      newDacValue = 1000 * (set * 100) / readVoltage;
+      break;
+    }
+
+    //Adjust for R17 Value
+    newDacValue = newDacValue * (double)settings->r17Value / 1000.0;
+    debug_printb(F("New DAC Value:"), "%d\n", (int)round(newDacValue));
+    dac.setValue(round(newDacValue));
+
     digitalWrite(P_LOADON_LED, HIGH);
     lcdRefreshMask |= UM_LOAD_ONOFF;
+    SaveSettings();
   }
   else
   {
@@ -288,6 +356,11 @@ void setOutput()
     digitalWrite(P_LOADON_LED, LOW);
     lcdRefreshMask |= UM_LOAD_ONOFF;
   }
+}
+
+void SetBacklight()
+{
+  lcd1.setBacklight(settings->backlight == 0 ? 255 : 0);
 }
 
 void refreshDisplay()
@@ -315,7 +388,6 @@ void refreshDisplay()
     {
       lcd1.setCursor(0, 1);
       lcd1.print(dtostrf((double)readCurrent / 1000, 5, 3, buffer));
-      Serial.println("Update Current on LCD");
       lcdRefreshMask &= ~UM_CURRENT;
       menu->PrintCursor();
     }
@@ -344,9 +416,9 @@ void refreshDisplay()
   }
 
   drawStats.add(micros() - loopStart);
-  if (drawStats.count() == 5000)
+  if (DEBUG_TIMINGS && drawStats.count() == 5000)
   {
-    Serial.print("RefeshLcd:Stats [Avg/Min->Max/Var]:");
+    Serial.print("RefeshLcd:");
     Serial.print((uint16_t)drawStats.average());
     Serial.print(" / ");
     Serial.print((uint16_t)drawStats.minimum());
@@ -360,7 +432,6 @@ void refreshDisplay()
 
 void loadButton_click()
 {
-  Serial.println("Load CLick");
   swLoadOnOff = !swLoadOnOff;
   setOutput();
 }
@@ -374,55 +445,51 @@ void selfTest()
   uint8_t selfTestResult = 0;
   lcd1.home();
   lcd1.print(F("= Electronic  Load ="));
+  lcd1.setCursor(0, 1);
+  lcd1.print(F("ADC DAC RTC IOE FLH"));
 
   //Check ADC Presence
-  lcd1.setCursor(0, 1);
-  lcd1.print("ADC:");
   Wire.requestFrom(ADC_ADDR, 1);
   delay(1);
   if (!Wire.available())
     selfTestResult |= 0x01;
-  lcd1.print(selfTestResult & 0x01 ? "NOK" : "OK ");
-  Serial.println(selfTestResult & 0x01 ? "ADC NOK" : "ADC OK");
 
   //Check DAC Presence
-  lcd1.print("  DAC:");
   Wire.requestFrom(DAC_ADDR, 1);
   delay(1);
   if (!Wire.available())
     selfTestResult |= 0x02;
-  lcd1.print(selfTestResult & 0x02 ? "NOK" : "OK");
-  Serial.println(selfTestResult & 0x02 ? "DAC NOK" : "DAC OK");
 
   //Check RTC Presence
-  lcd1.setCursor(0, 2);
-  lcd1.print("RTC:");
   Wire.beginTransmission(RTC_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
   Wire.requestFrom(RTC_ADDR, (uint8_t)1);
   if (!Wire.available())
     selfTestResult |= 0x04;
-  lcd1.print(selfTestResult & 0x04 ? "NOK" : "OK ");
-  Serial.println(selfTestResult & 0x04 ? "RTC NOK" : "RTC OK");
 
   //Check IOX
-  lcd1.print("  IOX:");
   Wire.beginTransmission(IOE_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
   Wire.requestFrom(IOE_ADDR, (uint8_t)1);
   if (!Wire.available())
     selfTestResult |= 0x08;
-  lcd1.print(selfTestResult & 0x08 ? "NOK" : "OK ");
-  Serial.println(selfTestResult & 0x08 ? "IOE NOK" : "IOE OK");
+
+  //Check Flash
+  if (!flash.initialize())
+    selfTestResult |= 0x10;
 
   //Result ?
-  if (selfTestResult > 0)
-    delay(2000);
+  for (uint8_t i = 0; i < 5; i++)
+  {
+    lcd1.setCursor(4 * i + 1, 2);
+    lcd1.print(selfTestResult & (1 << i) ? "X" : "V");
+  }
+  delay(selfTestResult > 0 ? 2000 : 500);
 
   //Booting
-  Serial.println(F("Self test done"));
+  debug_print("Self test done\n");
 }
 
 //TODO : Auto Gain adjustment : For low voltage, 4x will increase resolution
@@ -452,20 +519,14 @@ void actuateReadings()
   {
     adcErr = adc.convert(ch1Config);
     if (adcErr)
-    {
-      Serial.print("ADC-Ch1 Conv Err:");
-      Serial.println(adcErr);
-    }
+      debug_printb(F("ADC-Ch1 Conv Err:"), "%i\n", adcErr);
     runConvertCh = -1;
   }
   if (runConvertCh == 2)
   {
     adcErr = adc.convert(ch2Config);
     if (adcErr)
-    {
-      Serial.print("ADC-Ch2 Conv Err:");
-      Serial.println(adcErr);
-    }
+      debug_printb(F("ADC-Ch2 Conv Err:"), "%i\n", adcErr);
     runConvertCh = -2;
   }
 
@@ -477,8 +538,7 @@ void actuateReadings()
     {
       if (adcErr)
       {
-        Serial.print("ADC-Ch1 Read Err:");
-        Serial.println(adcErr);
+        debug_printb(F("ADC-Ch1 Read Err:"), "%i\n", adcErr);
       }
       else
       {
@@ -488,12 +548,10 @@ void actuateReadings()
         if (newVoltage != readVoltage)
         {
           readVoltage = newVoltage;
-          Serial.print("New Voltage:");
-          Serial.println(newVoltage);
           lcdRefreshMask |= (UM_VOLTAGE | UM_POWER);
         }
-        runConvertCh = 2;
       }
+      runConvertCh = 2;
     }
   }
 
@@ -505,23 +563,20 @@ void actuateReadings()
     {
       if (adcErr)
       {
-        Serial.print("ADC-Ch2 Read Err:");
-        Serial.println(adcErr);
+        debug_printb(F("ADC-Ch2 Read Err:"), "%i\n", adcErr);
       }
       else
       {
         if (adcValue < 0)
           adcValue = 0;
-        newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / r17Resistance);
+        newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / settings->r17Value);
         if (newCurrent != readCurrent)
         {
           readCurrent = newCurrent;
-          Serial.print("New Current:");
-          Serial.println(newCurrent);
           lcdRefreshMask |= (UM_CURRENT | UM_POWER);
         }
-        runConvertCh = 1;
       }
+      runConvertCh = 1;
     }
   }
 }
@@ -533,21 +588,42 @@ void adjustFanSpeed()
   switch (fanLevel)
   {
   case 0:
-    if (readTemperature > fanOnTemp[0] + fanHysteresis)
+    if (readTemperature > settings->fanTemps[0] + settings->fanHysteresis)
       fanLevel = 1;
     break;
   case 1:
-    if (readTemperature < fanOnTemp[0] - fanHysteresis)
+    if (readTemperature < settings->fanTemps[0] - settings->fanHysteresis)
       fanLevel = 0;
-    else if (readTemperature > fanOnTemp[1] + fanHysteresis)
+    else if (readTemperature > settings->fanTemps[1] + settings->fanHysteresis)
       fanLevel = 2;
     break;
   case 2:
-    if (readTemperature < fanOnTemp[1] - fanHysteresis)
+    if (readTemperature < settings->fanTemps[1] - settings->fanHysteresis)
       fanLevel = 1;
     break;
   }
   analogWrite(P_FAN, fanLevelPwm[fanLevel]);
+}
+
+Statistic flashClearStats;
+Statistic flashSaveStats;
+void SaveSettings()
+{
+  if (settings->version & 0x01)
+  {
+    unsigned long s = micros();
+    flash.blockErase4K(FLASH_ADR);
+    while (flash.busy())
+      ;
+    flashClearStats.add(micros() - s);
+    settings->version &= ~1; //Set Dirty flag to zero
+    s = micros();
+    flash.writeBytes(FLASH_ADR, settings, sizeof(Settings));
+    while (flash.busy())
+      ;
+    flashSaveStats.add(micros() - s);
+    debug_printb(F("Flash Stats (C/S):"), "%i/%i\n", flashClearStats.average(), flashSaveStats.average());
+  }
 }
 
 Statistic loopStats;
@@ -602,9 +678,21 @@ void setup()
   _rtc.startClock();
   _rtc.setSQW(RTCx::freq32768Hz);
 
+  //Load Settings from Flash
+  flash.readBytes(FLASH_ADR, settings, sizeof(Settings));
+  if ((settings->version >> 1) != FLASH_VERSION)
+  {
+    debug_printa("Setting Ver NoMatch %X vs %X\n", settings->version >> 1, FLASH_VERSION);
+    free(settings);
+    settings = new Settings();
+    Serial.println(settings->r17Value);
+  }
+  SetBacklight();
+
   Wire.setClock(400000); //Done after dac.Begin as it itself setClock to 100.000
 
   setupMenu();
+  menu_modeChanged(settings->mode);
 
   loopStats.clear();
 }
@@ -618,6 +706,11 @@ void loop()
   loopStart = micros();
   pushButton->tick();
   actuateReadings();
+  if (readTemperature > settings->fanTemps[2])
+  {
+    swLoadOnOff = false;
+    setOutput();
+  }
   adjustFanSpeed();
   refreshDisplay();
 
@@ -644,16 +737,18 @@ void loop()
   oldState = buttonState;
 
   loopStats.add(micros() - loopStart);
-  if (loopStats.count() == 5000)
+  if (DEBUG_TIMINGS && loopStats.count() == 5000)
   {
-    Serial.print("LoopStats:Stats [Avg/Min->Max/Var]:");
+    Serial.print("LoopStats:");
     Serial.print((uint16_t)loopStats.average());
     Serial.print(" / ");
     Serial.print((uint16_t)loopStats.minimum());
     Serial.print("->");
     Serial.print((uint16_t)loopStats.maximum());
     Serial.print(" / ");
-    Serial.println((uint16_t)loopStats.variance());
+    Serial.print((uint16_t)loopStats.variance());
+    Serial.print(" / ");
+    Serial.println((size_t)freeMemory());
     loopStats.clear();
   }
 }

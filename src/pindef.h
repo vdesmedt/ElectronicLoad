@@ -15,3 +15,4 @@
 #define P_LM35 A6
 #define P_FAN 5
 #endif
+#define P_FLASH_SS 8

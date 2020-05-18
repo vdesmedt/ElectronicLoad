@@ -645,6 +645,7 @@ void setup()
   pinMode(P_FAN, OUTPUT);
   digitalWrite(P_FAN, LOW);
   pinMode(P_LOADON_LED, OUTPUT);
+  pinMode(P_TRIGGER, INPUT_PULLUP);
 
   //Setup Encoder
   encoder = new ClickEncoder(P_ENC1, P_ENC2, P_ENCBTN, ENC_STEPS);

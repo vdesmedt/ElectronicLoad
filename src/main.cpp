@@ -46,14 +46,20 @@ LiquidCrystal_PCF8574 lcd1(0x27);
 #define UM_LOAD_ONOFF 1 << 4
 #define UM_TIME 1 << 5
 #define UM_MAH 1 << 6
-int lcdRefreshMask = ~0;
+#define UM_CELLCOUNT 1 << 7
+uint8_t lcdRefreshMask = ~0;
 
 #define WORKINGMODE_COUNT 4
+#define MODE_CC 0
+#define MODE_CR 1
+#define MODE_CP 2
+#define MODE_BA 3
 const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "BA"};
 const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "O", "W", "A"};
 #define BATT_TYPE_COUNT 2
 const char *battTypes[BATT_TYPE_COUNT] = {"Lipo", "NiMh"};
+const float battTypicalCellVoltage[BATT_TYPE_COUNT] = {3700, 1100};
 Menu *menu;
 MultiDigitValueMenuItem *setValueMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
@@ -115,25 +121,24 @@ void SaveSettings();
 bool menu_modeChanged(int8_t newMode)
 {
   settings->mode = newMode;
+  lcdRefreshMask |= UM_CELLCOUNT;
   setValueMenuItem->SetValue(settings->setValues[settings->mode]);
   setValueMenuItem->SetSuffix(modeUnits[newMode]);
   switch (settings->mode)
   {
-  case 0:
-  case 3:
+  case MODE_CC:
+  case MODE_BA:
     setValueMenuItem->SetPrecision(3);
     break;
-  case 1:
-    setValueMenuItem->SetPrecision(1);
-    break;
-  case 2:
+  case MODE_CR:
+  case MODE_CP:
     setValueMenuItem->SetPrecision(1);
     break;
   }
   menu->PrintItem(setValueMenuItem);
   swLoadOnOff = false;
-  setOutput();
-  settings->version |= 0x01;
+  lcdRefreshMask |= UM_LOAD_ONOFF;
+  settings->version |= 0x01; //Set Dirty
   return true;
 }
 
@@ -145,7 +150,6 @@ bool menu_setValueChanged(int32_t newValue)
     return false;
   settings->setValues[settings->mode] = newValue;
   settings->version |= 0x01;
-  setOutput();
   return true;
 }
 
@@ -232,7 +236,6 @@ bool menu_R17Changed(int32_t newValue)
   {
     settings->r17Value = newValue;
     settings->version |= 0x01;
-    setOutput();
     return true;
   }
   return false;
@@ -351,14 +354,14 @@ void setOutput()
     double set = settings->setValues[settings->mode];
     switch (settings->mode)
     {
-    case 0: //CC
-    case 3: //Battery
+    case MODE_CC:
+    case MODE_BA:
       newDacValue = set;
       break;
-    case 1:                                           //CR
+    case MODE_CR:
       newDacValue = (double)readVoltage / (set / 10); //mV / Ω
       break;
-    case 2: //CP
+    case MODE_CP:
       newDacValue = 1000 * (set * 100) / readVoltage;
       break;
     }
@@ -381,13 +384,41 @@ void SetBacklight()
 
 void refreshDisplay()
 {
+#if DEBUG_TIMINGS
   static Statistic drawStats;
   static unsigned long loopStart = 0;
   loopStart = micros();
-
+#endif
   static char buffer[10];
   if (menu->GetCurrentPage() == 0)
   {
+    //Load On Off
+    if (lcdRefreshMask & UM_LOAD_ONOFF)
+    {
+      lcd1.setCursor(0, 0);
+      lcd1.print(swLoadOnOff ? "On :" : "Off:");
+      lcdRefreshMask &= ~UM_LOAD_ONOFF;
+      menu->PrintCursor();
+    }
+
+    //Bat cell Count
+    if (lcdRefreshMask & UM_CELLCOUNT)
+    {
+      lcd1.setCursor(7, 0);
+      if (settings->mode == MODE_BA)
+      {
+        lcd1.print(battCellCount);
+        lcd1.print("x");
+        lcd1.print(battTypes[settings->battType]);
+      }
+      else
+      {
+        lcd1.print("      ");
+      }
+      lcdRefreshMask &= ~UM_CELLCOUNT;
+      menu->PrintCursor();
+    }
+
     //Temp
     if (lcdRefreshMask & UM_TEMP)
     {
@@ -421,14 +452,6 @@ void refreshDisplay()
       lcdRefreshMask &= ~UM_POWER;
       menu->PrintCursor();
     }
-    //Load On Off
-    if (lcdRefreshMask & UM_LOAD_ONOFF)
-    {
-      lcd1.setCursor(0, 0);
-      lcd1.print(swLoadOnOff ? "On :" : "Off:");
-      lcdRefreshMask &= ~UM_LOAD_ONOFF;
-      menu->PrintCursor();
-    }
 
     //Time
     static unsigned long lastTotalSec = 0;
@@ -449,7 +472,7 @@ void refreshDisplay()
       lcdRefreshMask &= ~UM_TIME;
     }
   }
-
+#if DEBUG_TIMINGS
   drawStats.add(micros() - loopStart);
   if (DEBUG_TIMINGS && drawStats.count() == 5000)
   {
@@ -463,6 +486,7 @@ void refreshDisplay()
     Serial.println((uint16_t)drawStats.variance());
     drawStats.clear();
   }
+#endif
 }
 
 void loadButton_click()
@@ -588,9 +612,19 @@ void actuateReadings()
       {
         if (adcValue < 0)
           adcValue = 0;
+        static unsigned long lastVoltageReading = 0;
         newVoltage = adcValue * (2048.0 / 32768) * 50;
-        if (newVoltage != readVoltage)
+        if (newVoltage != readVoltage || lastVoltageReading + 500 < millis())
         {
+          if (settings->mode == MODE_BA)
+          {
+            uint8_t bcc = round((float)newVoltage / battTypicalCellVoltage[settings->battType]);
+            if (bcc != battCellCount)
+            {
+              battCellCount = bcc;
+              lcdRefreshMask |= UM_CELLCOUNT;
+            }
+          }
           readVoltage = newVoltage;
           lcdRefreshMask |= (UM_VOLTAGE | UM_POWER);
         }
@@ -677,7 +711,6 @@ void SaveSettings()
   }
 }
 
-Statistic loopStats;
 void setup()
 {
   Serial.begin(9600);
@@ -723,9 +756,6 @@ void setup()
   selfTest();
 
   dac.begin();
-  dac.setValue(1);
-  dac.setValue(0);
-  setOutput();
 
   //Load Settings from Flash
   flash.readBytes(FLASH_ADR, settings, sizeof(Settings));
@@ -746,22 +776,24 @@ void setup()
   setupMenu();
   menu_modeChanged(settings->mode);
 
-  loopStats.clear();
+  lcdRefreshMask = ~0;
 }
 
 void loop()
 {
+#if DEBUG_TIMINGS
+  static Statistic loopStats;
   static unsigned long loopStart = 0;
+  loopStart = micros();
+#endif
   static uint8_t buttonState;
   static uint8_t oldState = ClickEncoder::Open;
 
-  loopStart = micros();
   pushButton->tick();
   actuateReadings();
   if (readTemperature > settings->fanTemps[2])
   {
-    SaveSettings();
-    setOutput();
+    LoadOff();
   }
   adjustFanSpeed();
   refreshDisplay();
@@ -778,8 +810,9 @@ void loop()
     menu->LongClick();
   oldState = buttonState;
 
+#if DEBUG_TIMINGS
   loopStats.add(micros() - loopStart);
-  if (DEBUG_TIMINGS && loopStats.count() == 5000)
+  if (loopStats.count() == 5000)
   {
     Serial.print("LoopStats:");
     Serial.print((uint16_t)loopStats.average());
@@ -793,4 +826,5 @@ void loop()
     Serial.println((size_t)freeMemory());
     loopStats.clear();
   }
+#endif
 }

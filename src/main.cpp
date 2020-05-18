@@ -10,13 +10,13 @@
 #include <LiquidCrystal_PCF8574.h>
 #include <MCP4725.h>
 #include <MCP342x.h>
-#include <RTCx.h>
 #include <Menu.h>
 #include <Statistic.h>
 #include <Filters/SMA.hpp>
 #include <SPIFlash.h>
 #include <MemoryFree.h>
 #include <debug.h>
+#include <MCP79410_Timer.h>
 #include <specialLcdChar.h>
 #include "pindef.h"
 
@@ -33,7 +33,7 @@
 
 MCP4725 dac(DAC_ADDR);
 MCP342x adc = MCP342x(ADC_ADDR);
-RTCx _rtc(RTC_ADDR);
+MCP79410_Timer _rtcTimer(RTC_ADDR);
 //END ADC-DAC
 
 //BEGIN - LCD ###
@@ -44,6 +44,8 @@ LiquidCrystal_PCF8574 lcd1(0x27);
 #define UM_CURRENT 1 << 2
 #define UM_POWER 1 << 3
 #define UM_LOAD_ONOFF 1 << 4
+#define UM_TIME 1 << 5
+#define UM_MAH 1 << 6
 int lcdRefreshMask = ~0;
 
 #define WORKINGMODE_COUNT 4
@@ -93,6 +95,7 @@ uint16_t readTemperature = 0; // 1/10 °C
 int16_t readCurrent = 0;      // mA
 int16_t readVoltage = 0;      // mV
 bool swLoadOnOff = false;
+double totalmAh = 0;
 //END - Load ###
 
 OneButton *pushButton;
@@ -161,7 +164,8 @@ void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
     lcd1.print("V");
     lcd1.setCursor(19, 1);
     lcd1.print("W");
-
+    lcd1.setCursor(17, 3);
+    lcd1.print("mAh");
     lcdRefreshMask = ~0;
     SaveSettings();
     break;
@@ -321,6 +325,24 @@ void timerIsr()
   encoder->service();
 }
 
+void LoadOn()
+{
+  swLoadOnOff = true;
+  digitalWrite(P_LOADON_LED, HIGH);
+  lcdRefreshMask |= UM_LOAD_ONOFF;
+  setOutput();
+  _rtcTimer.start();
+}
+
+void LoadOff()
+{
+  swLoadOnOff = false;
+  digitalWrite(P_LOADON_LED, LOW);
+  lcdRefreshMask |= UM_LOAD_ONOFF;
+  setOutput();
+  _rtcTimer.stop();
+}
+
 void setOutput()
 {
   if (swLoadOnOff)
@@ -345,16 +367,10 @@ void setOutput()
     newDacValue = newDacValue * (double)settings->r17Value / 1000.0;
     debug_printb(F("New DAC Value:"), "%d\n", (int)round(newDacValue));
     dac.setValue(round(newDacValue));
-
-    digitalWrite(P_LOADON_LED, HIGH);
-    lcdRefreshMask |= UM_LOAD_ONOFF;
-    SaveSettings();
   }
   else
   {
     dac.setValue(0);
-    digitalWrite(P_LOADON_LED, LOW);
-    lcdRefreshMask |= UM_LOAD_ONOFF;
   }
 }
 
@@ -413,6 +429,25 @@ void refreshDisplay()
       lcdRefreshMask &= ~UM_LOAD_ONOFF;
       menu->PrintCursor();
     }
+
+    //Time
+    static unsigned long lastTotalSec = 0;
+    static unsigned long lastTmUpdate = 0;
+    if (lcdRefreshMask & UM_TIME || (lastTmUpdate + 200 < millis() && lastTotalSec != _rtcTimer.getTotalSeconds()))
+    {
+      static char buffer[10];
+      lcd1.setCursor(0, 3);
+      _rtcTimer.getTime(buffer);
+      lcd1.print(buffer);
+      lcd1.setCursor(10, 3);
+      dtostrf(totalmAh / 3600000, 7, 1, buffer);
+      lcd1.print(buffer);
+
+      menu->PrintCursor();
+      lastTotalSec = _rtcTimer.getTotalSeconds();
+      lastTmUpdate = millis();
+      lcdRefreshMask &= ~UM_TIME;
+    }
   }
 
   drawStats.add(micros() - loopStart);
@@ -433,11 +468,20 @@ void refreshDisplay()
 void loadButton_click()
 {
   swLoadOnOff = !swLoadOnOff;
-  setOutput();
+  if (swLoadOnOff)
+    LoadOn();
+  else
+    LoadOff();
+  SaveSettings();
 }
 
 void loadButton_longClick()
 {
+  if (!swLoadOnOff)
+  {
+    _rtcTimer.reset();
+    totalmAh = 0;
+  }
 }
 
 void selfTest()
@@ -569,11 +613,18 @@ void actuateReadings()
       {
         if (adcValue < 0)
           adcValue = 0;
+        static unsigned long lastCurrentReading = 0;
         newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / settings->r17Value);
-        if (newCurrent != readCurrent)
+        if (newCurrent != readCurrent || lastCurrentReading + 500 < millis())
         {
+          if (swLoadOnOff)
+          {
+            totalmAh += readCurrent * (millis() - lastCurrentReading);
+          }
           readCurrent = newCurrent;
+
           lcdRefreshMask |= (UM_CURRENT | UM_POWER);
+          lastCurrentReading = millis();
         }
       }
       runConvertCh = 1;
@@ -676,9 +727,6 @@ void setup()
   dac.setValue(0);
   setOutput();
 
-  _rtc.startClock();
-  _rtc.setSQW(RTCx::freq32768Hz);
-
   //Load Settings from Flash
   flash.readBytes(FLASH_ADR, settings, sizeof(Settings));
   if ((settings->version >> 1) != SETTINGS_VERSION)
@@ -712,21 +760,11 @@ void loop()
   actuateReadings();
   if (readTemperature > settings->fanTemps[2])
   {
-    swLoadOnOff = false;
+    SaveSettings();
     setOutput();
   }
   adjustFanSpeed();
   refreshDisplay();
-
-  struct RTCx::tm tm;
-  static unsigned long lastRtcRead = 0;
-  if (millis() - lastRtcRead > 500)
-  {
-    _rtc.readClock(tm);
-    RTCx::time_t t = RTCx::mktime(&tm);
-    //Serial.println(t);
-    lastRtcRead = millis();
-  }
 
   //Encoder mgmnt
   int16_t enc = encoder->getValue();

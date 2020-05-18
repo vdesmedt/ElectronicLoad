@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#define EDCL_DEBUG true
 
 #if EDCL_DEBUG
 #define DEB_BUFFER_LEN 100
@@ -29,5 +28,6 @@
     } while (0)
 #else
 #define debug_printa(msg, ...)
+#define debug_printb(pre, msg, ...)
 #define debug_print(msg)
 #endif

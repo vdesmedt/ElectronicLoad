@@ -1,7 +1,7 @@
-#define DEBUG_BOARD_
+#define DEBUG_BOARD false
 #define DEBUG_TIMINGS true
+#define EDCL_DEBUG true
 
-#define MCP4725_EXTENDED
 #include <Wire.h>
 #include <Arduino.h>
 #include <ClickEncoder.h>
@@ -21,7 +21,7 @@
 #include "pindef.h"
 
 //BEGIN ADC-DAC
-#ifdef DEBUG_BOARD
+#if DEBUG_BOARD
 #define DAC_ADDR 0x60
 #else
 #define DAC_ADDR 0x61
@@ -54,11 +54,11 @@ uint8_t lcdRefreshMask = ~0;
 #define MODE_CR 1
 #define MODE_CP 2
 #define MODE_BA 3
-const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "BA"};
+const char *workingModes[WORKINGMODE_COUNT] = {"cC", "cR", "cP", "Ba"};
 const char *onOffChoices[] = {"On ", "Off"};
-const char *modeUnits[WORKINGMODE_COUNT] = {"A", "O", "W", "A"};
+const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
 #define BATT_TYPE_COUNT 2
-const char *battTypes[BATT_TYPE_COUNT] = {"Lipo", "NiMh"};
+const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh"};
 const float battTypicalCellVoltage[BATT_TYPE_COUNT] = {3700, 1100};
 Menu *menu;
 MultiDigitValueMenuItem *setValueMenuItem = NULL;
@@ -87,7 +87,7 @@ SPIFlash flash(P_FLASH_SS, 0xEF30);
 
 //BEGIN - Encoder ###
 ClickEncoder *encoder;
-#ifdef DEBUG_BOARD
+#if DEBUG_BOARD
 #define ENC_STEPS 2
 #else
 #define ENC_STEPS 4
@@ -441,7 +441,7 @@ void refreshDisplay()
     if (lcdRefreshMask & UM_VOLTAGE)
     {
       lcd1.setCursor(7, 1);
-      lcd1.print(dtostrf((double)readVoltage / 1000, 5, 3, buffer));
+      lcd1.print(dtostrf((double)readVoltage / 1000, 6, 3, buffer));
       lcdRefreshMask &= ~UM_VOLTAGE;
       menu->PrintCursor();
     }
@@ -718,12 +718,7 @@ void setup()
   // initialize the lcd
   lcd1.begin(20, 4);
   lcd1.setBacklight(255);
-  lcd1.createChar(SC_THERMO_L0, thermo_l0);
-  lcd1.createChar(SC_THERMO_L1, thermo_l1);
-  lcd1.createChar(SC_THERMO_L2, thermo_l2);
-  lcd1.createChar(SC_THERMO_L3, thermo_l3);
-
-  memset((void *)modeUnits[1], 0xF4, 1);
+  setupSPecialLcdChars(&lcd1);
 
   pinMode(P_LM35, INPUT);
   pinMode(P_FAN, OUTPUT);
@@ -740,7 +735,7 @@ void setup()
   encoder->setHoldTime(500);
 
 //Setup Load button
-#ifdef DEBUG_BOARD
+#if DEBUG_BOARD
   pushButton = new OneButton(P_LOADON_BTN, 1, true);
 #else
   pushButton = new OneButton(P_LOADON_BTN, 0, false);
@@ -796,6 +791,7 @@ void loop()
     LoadOff();
   }
   adjustFanSpeed();
+  setOutput();
   refreshDisplay();
 
   //Encoder mgmnt

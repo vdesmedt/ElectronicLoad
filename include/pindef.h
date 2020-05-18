@@ -1,4 +1,4 @@
-#ifdef DEBUG_BOARD
+#if DEBUG_BOARD
 #define P_ENC1 4
 #define P_ENC2 3
 #define P_ENCBTN 5

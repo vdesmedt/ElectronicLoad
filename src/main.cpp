@@ -450,9 +450,9 @@ void setup()
 void loop()
 {
 #if DEBUG_TIMINGS
-  static Statistic loopStats;
+  static Distribution ellapsedDistribution(20);
   static unsigned long loopStart = 0;
-  loopStart = micros();
+  loopStart = millis();
 #endif
   static uint16_t loopCOunt = 0;
   static uint8_t buttonState;
@@ -488,20 +488,12 @@ void loop()
   }
 
 #if DEBUG_TIMINGS
-  loopStats.add(micros() - loopStart);
-  if (loopStats.count() == 5000)
+  ellapsedDistribution.Add(millis() - loopStart);
+  if (ellapsedDistribution.samples >= 5000)
   {
-    Serial.print("LoopStats:");
-    Serial.print((uint16_t)loopStats.average());
-    Serial.print(" / ");
-    Serial.print((uint16_t)loopStats.minimum());
-    Serial.print("->");
-    Serial.print((uint16_t)loopStats.maximum());
-    Serial.print(" / ");
-    Serial.print((uint16_t)loopStats.variance());
-    Serial.print(" / ");
-    Serial.println((size_t)freeMemory());
-    loopStats.clear();
+    Serial.print("Loop Tm Distri :");
+    ellapsedDistribution.Print();
+    ellapsedDistribution.Clear();
   }
 #endif
 }

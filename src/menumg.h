@@ -174,7 +174,7 @@ void setupMenu()
     cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 4, 0, menu_modeChanged, false);
     cmi->currentChoiceIndex = settings->mode;
     setValueMenuItem = menu->AddValue(settings->setValues[settings->mode], 6, 3, 0, 2, menu_setValueChanged);
-    setValueMenuItem->SetPrefix("Set:");
+    setValueMenuItem->SetPrefix(F("Set:"));
     setValueMenuItem->SetSuffix(modeUnits[settings->mode]);
 
     menu->AddGoToPage(1, "[Conf]", 14, 2);
@@ -183,17 +183,17 @@ void setupMenu()
     menu->AddGoToPage(0, "[Main]", 0, 0);
     cmi = menu->AddMultiChoice(onOffChoices, 2, 0, 1, menu_BackLightChanged, true);
     cmi->currentChoiceIndex = settings->backlight;
-    cmi->SetPrefix("Backlight   :");
+    cmi->SetPrefix(F("Backlight   :"));
 
     vmi = menu->AddValue(settings->r17Value, 5, 1, 0, 2, menu_R17Changed);
-    vmi->SetPrefix("R17 Value   :");
+    vmi->SetPrefix(F("R17 Value   :"));
     vmi->SetSuffix("m\xF4");
     cmi = menu->AddMultiChoice(battTypes, 2, 0, 3, menu_BattTypeChanged, true);
-    cmi->SetPrefix("Battery Type:");
+    cmi->SetPrefix(F("Battery Type:"));
     cmi->currentChoiceIndex = settings->battType;
 
     setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 4, 1, 0, 4, menu_cutOffChanged);
-    setBattCutOffMenuItem->SetPrefix("Batt Cut Off:");
+    setBattCutOffMenuItem->SetPrefix(F("Batt Cut Off:"));
     setBattCutOffMenuItem->SetSuffix("V");
     setBattCutOffMenuItem->DigitIndex = 1;
 
@@ -203,19 +203,19 @@ void setupMenu()
     menu->AddPage();
     menu->AddGoToPage(1, "[Settings]", 0, 0);
     vmi = menu->AddValue(settings->fanTemps[0], 4, 1, 0, 1, menu_FanOnTemp1Changed);
-    vmi->SetPrefix("Level 1 :");
+    vmi->SetPrefix(F("Level 1 :"));
     vmi->SetSuffix("\xDF\x43");
     vmi->DigitIndex = 1;
     vmi = menu->AddValue(settings->fanTemps[1], 4, 1, 0, 2, menu_FanOnTemp2Changed);
-    vmi->SetPrefix("Level 2 :");
+    vmi->SetPrefix(F("Level 2 :"));
     vmi->SetSuffix("\xDF\x43");
     vmi->DigitIndex = 1;
     vmi = menu->AddValue(settings->fanTemps[2], 4, 1, 0, 3, menu_FanOnTemp3Changed);
-    vmi->SetPrefix("Cut Off :");
+    vmi->SetPrefix(F("Cut Off :"));
     vmi->SetSuffix("\xDF\x43");
     vmi->DigitIndex = 1;
     vmi = menu->AddValue(settings->fanHysteresis, 3, 1, 0, 4, menu_FanHysteresisChanged);
-    vmi->SetPrefix("Hysteresis:");
+    vmi->SetPrefix(F("Hysteresis:"));
     vmi->SetSuffix("\xDF\x43");
     vmi->DigitIndex = 1;
 

@@ -1,4 +1,5 @@
 #include <MultiDigitValueMenuItem.h>
+#include <Arduino.h>
 
 int ipow(int base, int exp)
 {
@@ -79,13 +80,13 @@ uint8_t MultiDigitValueMenuItem::GetCursorOffset(bool focus)
         if (_precision > 0 && shift >= _lenght - _precision - 1)
             shift++;
         if (_prefix)
-            shift += strlen(_prefix);
+            shift += _prefixLenth;
         return shift;
     }
     else
     {
         if (_prefix)
-            return strlen(_prefix);
+            return _prefixLenth;
         return 0;
     }
 }

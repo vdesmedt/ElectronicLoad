@@ -46,6 +46,6 @@ const char *MultiChoiceMenuItem::GetLabel()
 uint8_t MultiChoiceMenuItem::GetCursorOffset(bool focus)
 {
     if (_prefix)
-        return strlen(_prefix);
+        return _prefixLenth;
     return 0;
 }

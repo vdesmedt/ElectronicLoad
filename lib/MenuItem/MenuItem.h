@@ -17,18 +17,10 @@ public:
     };
 
     MenuItem(uint8_t cursorX, uint8_t cursorY);
-    void SetPrefix(const char *prefix)
-    {
-        _prefix = prefix;
-        _updateMask |= UM_PREFIX;
-    }
-    void SetSuffix(const char *suffix)
-    {
-        _suffix = suffix;
-        _updateMask |= UM_SUFFIX;
-    }
+    void SetPrefix(const __FlashStringHelper *prefix);
+    void SetSuffix(const char *suffix);
 
-    virtual const char *GetPrefix() { return _prefix ? _prefix : ""; }
+    virtual const __FlashStringHelper *GetPrefix() { return _prefix ? _prefix : F(""); }
     virtual const char *GetSufix() { return _suffix ? _suffix : ""; }
     virtual const char *GetLabel() = 0;
     virtual uint8_t GetCursorOffset(bool focus) { return 0; }
@@ -45,7 +37,8 @@ public:
     void setCy(uint8_t y) { cursor = cursor % 20 + 20 * y; }
 
 protected:
-    const char *_prefix = NULL;
+    const __FlashStringHelper *_prefix = NULL;
+    uint8_t _prefixLenth;
     const char *_suffix = NULL;
     uint8_t _updateMask = 0;
 

@@ -27,13 +27,15 @@ public:
         this->_value = value;
     }
     int32_t GetValue() { return this->_value; }
+
     uint8_t GetPrecision() { return this->_precision; }
-    void SetPrecision(int32_t precision) { _precision = precision; }
+    void SetPrecision(uint8_t precision) { _precision = precision; }
+    uint8_t GetLength() { return this->_lenght; }
+    void SetLength(uint8_t length) { this->_lenght = length; }
+
     bool AllowNeg = false;
     uint8_t DigitIndex = 0;
 
-    uint8_t GetLength() { return this->_lenght; }
-    void SetLength(uint8_t length) { this->_lenght = length; }
     bool (*_onChange)(int32_t);
 
 protected:

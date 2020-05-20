@@ -1,6 +1,6 @@
 #define DEBUG_BOARD false
-#define DEBUG_TIMINGS false
 #define EDCL_DEBUG false
+#define DEBUG_TIMINGS EDCL_DEBUG && true
 
 #include <Wire.h>
 #include <Arduino.h>
@@ -11,7 +11,6 @@
 #include <MCP4725.h>
 #include <MCP342x.h>
 #include <Menu.h>
-#include <Statistic.h>
 #include <Filters/SMA.hpp>
 #include <SPIFlash.h>
 #include <MemoryFree.h>
@@ -46,16 +45,21 @@ ClickEncoder *encoder;
 OneButton *pushButton;
 
 extern Menu *menu;
-const float battTypicalCellVoltage[BATT_TYPE_COUNT] = {3700, 1100};
+const float battTypicalCellVoltage[BATT_TYPE_COUNT] = {3700, 1100, 3200, 1700};
 struct Settings *settings = new Settings();
-uint8_t battCellCount = 1;
-uint8_t fanLevel = 0;
 uint16_t readTemperature = 0; // 1/10 °C
 int16_t readCurrent = 0;      // mA
 int16_t readVoltage = 0;      // mV
-bool swLoadOnOff = false;
 double totalmAh = 0;
 uint8_t lcdRefreshMask = ~0;
+
+uint8_t state = 0;
+#define onOffState (state & 0x01)
+#define setOnOffState(s) state = ((state & ~0x01) | (s & 0x01))
+#define fanLevelState ((state >> 1) & 0x03)
+#define setFanLevel(l) state = (state & ~(0x03 << 1)) | ((l & 0x03) << 1)
+#define battCellCountState ((state >> 3) & 0x07)
+#define setBattCellCount(b) state = (state & ~(0x07 << 3)) | ((b & 0x07) << 3)
 
 void timerIsr()
 {
@@ -64,7 +68,7 @@ void timerIsr()
 
 void LoadOn()
 {
-  swLoadOnOff = true;
+  setOnOffState(1);
   digitalWrite(P_LOADON_LED, HIGH);
   lcdRefreshMask |= UM_LOAD_ONOFF;
   setOutput();
@@ -73,7 +77,7 @@ void LoadOn()
 
 void LoadOff()
 {
-  swLoadOnOff = false;
+  setOnOffState(0);
   digitalWrite(P_LOADON_LED, LOW);
   lcdRefreshMask |= UM_LOAD_ONOFF;
   setOutput();
@@ -82,7 +86,7 @@ void LoadOff()
 
 void setOutput()
 {
-  if (swLoadOnOff)
+  if (onOffState)
   {
     double newDacValue = 0; //Output in mV
     double set = settings->setValues[settings->mode];
@@ -125,7 +129,7 @@ void refreshDisplay()
     if (lcdRefreshMask & UM_LOAD_ONOFF)
     {
       lcd1.setCursor(0, 0);
-      lcd1.print(swLoadOnOff ? "On :" : "Off:");
+      lcd1.print(onOffState ? "On :" : "Off:");
       lcdRefreshMask &= ~UM_LOAD_ONOFF;
       menu->PrintCursor();
     }
@@ -136,9 +140,8 @@ void refreshDisplay()
       lcd1.setCursor(7, 0);
       if (settings->mode == MODE_BA)
       {
-        lcd1.print(battCellCount);
-        lcd1.print("x");
-        lcd1.print(battTypes[settings->battType]);
+        lcd1.print(battCellCountState);
+        lcd1.write((uint8_t)SC_BATT);
       }
       else
       {
@@ -154,7 +157,7 @@ void refreshDisplay()
       lcd1.setCursor(13, 0);
       lcd1.print(dtostrf((double)readTemperature / 10, 5, 1, buffer));
       lcd1.setCursor(19, 0);
-      lcd1.write(SC_THERMO_L0 + fanLevel);
+      lcd1.write(SC_THERMO_L0 + fanLevelState);
       lcdRefreshMask &= ~UM_TEMP;
       menu->PrintCursor();
     }
@@ -205,17 +208,16 @@ void refreshDisplay()
 
 void loadButton_click()
 {
-  swLoadOnOff = !swLoadOnOff;
-  if (swLoadOnOff)
-    LoadOn();
-  else
+  if (onOffState)
     LoadOff();
+  else
+    LoadOn();
   SaveSettings();
 }
 
 void loadButton_longClick()
 {
-  if (!swLoadOnOff)
+  if (!onOffState)
   {
     _rtcTimer.reset();
     totalmAh = 0;
@@ -330,10 +332,10 @@ void actuateReadings()
       {
         if (settings->mode == MODE_BA)
         {
-          uint8_t bcc = round((float)newVoltage / battTypicalCellVoltage[settings->battType]);
-          if (bcc != battCellCount)
+          uint8_t bcc = round((float)newVoltage / (float)battTypicalCellVoltage[settings->battType]);
+          if (bcc != battCellCountState)
           {
-            battCellCount = bcc;
+            setBattCellCount(bcc);
             lcdRefreshMask |= UM_CELLCOUNT;
           }
         }
@@ -353,7 +355,7 @@ void actuateReadings()
       newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / settings->r17Value);
       if (newCurrent != readCurrent || lastCurrentUpdate + 500 < millis())
       {
-        if (swLoadOnOff)
+        if (onOffState)
           totalmAh += readCurrent * (millis() - lastCurrentUpdate);
         readCurrent = newCurrent;
         lcdRefreshMask |= (UM_CURRENT | UM_POWER);
@@ -369,24 +371,24 @@ void actuateReadings()
 void adjustFanSpeed()
 {
   static uint16_t fanLevelPwm[] = {0, 900, 1023};
-  switch (fanLevel)
+  switch (fanLevelState)
   {
   case 0:
     if (readTemperature > settings->fanTemps[0] + settings->fanHysteresis)
-      fanLevel = 1;
+      setFanLevel(1);
     break;
   case 1:
     if (readTemperature < settings->fanTemps[0] - settings->fanHysteresis)
-      fanLevel = 0;
+      setFanLevel(0);
     else if (readTemperature > settings->fanTemps[1] + settings->fanHysteresis)
-      fanLevel = 2;
+      setFanLevel(2);
     break;
   case 2:
     if (readTemperature < settings->fanTemps[1] - settings->fanHysteresis)
-      fanLevel = 1;
+      setFanLevel(1);
     break;
   }
-  analogWrite(P_FAN, fanLevelPwm[fanLevel]);
+  analogWrite(P_FAN, fanLevelPwm[fanLevelState]);
 }
 
 void setup()
@@ -480,7 +482,7 @@ void loop()
     menu->LongClick();
   oldState = buttonState;
 
-  if (loopCOunt++ >= 5000)
+  if (loopCOunt++ >= 10000)
   {
     Serial.print("Free:");
     Serial.println(freeMemory());

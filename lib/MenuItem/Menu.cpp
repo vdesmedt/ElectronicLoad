@@ -66,9 +66,9 @@ void Menu::EncoderInc(int8_t steps)
             _currentItem = _pageFirstIndexes[_currentPage + 1] - 1;
 
         uint8_t nsl = _scrollLevel;
-        if (steps > 0 && _menuItems[_currentItem]->cursorY - _scrollLevel > 3)
+        if (steps > 0 && _menuItems[_currentItem]->getCy() - _scrollLevel > 3)
             nsl = _scrollLevel + 1;
-        else if (_menuItems[_currentItem]->cursorY - _scrollLevel < 0)
+        else if (_menuItems[_currentItem]->getCy() - _scrollLevel < 0)
             nsl = _scrollLevel - 1;
 
         if (nsl != _scrollLevel)
@@ -114,7 +114,7 @@ void Menu::Print()
     for (int i = this->_pageFirstIndexes[this->_currentPage]; i < this->_pageFirstIndexes[this->_currentPage + 1]; i++)
     {
         mi = _menuItems[i];
-        if (mi->cursorY >= _scrollLevel && mi->cursorY - _scrollLevel < 4)
+        if (mi->getCy() >= _scrollLevel && mi->getCy() - _scrollLevel < 4)
             this->PrintItem(this->_menuItems[i]);
     }
     this->PrintCursor();
@@ -122,7 +122,7 @@ void Menu::Print()
 
 void Menu::PrintItem(MenuItem *mi)
 {
-    _lcd->setCursor(mi->cursorX, mi->cursorY - _scrollLevel);
+    _lcd->setCursor(mi->getCx(), mi->getCy() - _scrollLevel);
     _lcd->print(mi->GetPrefix());
     _lcd->print(mi->GetLabel());
     _lcd->print(mi->GetSufix());
@@ -131,7 +131,7 @@ void Menu::PrintItem(MenuItem *mi)
 void Menu::PrintCursor()
 {
     MenuItem *mi = this->_menuItems[this->_currentItem];
-    _lcd->setCursor(mi->cursorX + mi->GetCursorOffset(_selected), mi->cursorY - _scrollLevel);
+    _lcd->setCursor(mi->getCx() + mi->GetCursorOffset(_selected), mi->getCy() - _scrollLevel);
     if (mi->GetCursorType(_selected) == MenuItem::cursorType::Normal)
     {
         _lcd->noBlink();

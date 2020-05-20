@@ -55,7 +55,7 @@ void SaveSettings()
         while (flash.busy())
             ;
 #if EDCL_DEBUG
-        debug_printb(F("Flash Stats took:"), "%iµs\n", micros() - s);
+        debug_printb(F("Flash Stats took:"), "%luµs\n", micros() - s);
 #endif
     }
 }

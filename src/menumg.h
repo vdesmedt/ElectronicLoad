@@ -7,15 +7,16 @@ Menu *menu;
 MultiDigitValueMenuItem *setValueMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
 
+void LoadOff();
+
 extern Settings *settings;
 extern uint8_t lcdRefreshMask;
-extern bool swLoadOnOff;
 extern LiquidCrystal_PCF8574 lcd1;
 
 const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
 const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
-const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh"};
+const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
 
 bool menu_modeChanged(int8_t newMode)
 {
@@ -35,7 +36,7 @@ bool menu_modeChanged(int8_t newMode)
         break;
     }
     menu->PrintItem(setValueMenuItem);
-    swLoadOnOff = false;
+    LoadOff();
     lcdRefreshMask |= UM_LOAD_ONOFF;
     settings->version |= 0x01; //Set Dirty
     return true;

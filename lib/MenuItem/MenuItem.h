@@ -39,13 +39,18 @@ public:
     virtual bool Click(bool *focus, uint8_t *page) { return false; };
     virtual bool LongClick(bool *focus, uint8_t *page) { return false; };
 
-    uint8_t cursorX = 0;
-    uint8_t cursorY = 0;
+    uint8_t getCx() { return cursor % 20; }
+    uint8_t getCy() { return cursor / 20; }
+    void setCx(uint8_t x) { cursor = cursor / 20 + x; }
+    void setCy(uint8_t y) { cursor = cursor % 20 + 20 * y; }
 
 protected:
     const char *_prefix = NULL;
     const char *_suffix = NULL;
     uint8_t _updateMask = 0;
+
+private:
+    uint8_t cursor = 0;
 };
 
 #endif

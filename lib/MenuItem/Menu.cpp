@@ -73,8 +73,6 @@ void Menu::EncoderInc(int8_t steps)
 
         if (nsl != _scrollLevel)
         {
-            Serial.print("New Scroll Level:");
-            Serial.println(_scrollLevel);
             _scrollLevel = nsl;
             _lcd->clear();
             this->Print();

@@ -1,6 +1,6 @@
 #define DEBUG_BOARD false
-#define DEBUG_TIMINGS true
-#define EDCL_DEBUG true
+#define DEBUG_TIMINGS false
+#define EDCL_DEBUG false
 
 #include <Wire.h>
 #include <Arduino.h>
@@ -15,16 +15,21 @@
 #include <Filters/SMA.hpp>
 #include <SPIFlash.h>
 #include <MemoryFree.h>
+#include <Settings.h>
 #include <debug.h>
 #include <MCP79410_Timer.h>
+#include "header.h"
 #include <specialLcdChar.h>
-#include "pindef.h"
+#include "menumg.h"
+#include <Distribution.h>
 
 //BEGIN ADC-DAC
 #if DEBUG_BOARD
 #define DAC_ADDR 0x60
+#define ENC_STEPS 2
 #else
 #define DAC_ADDR 0x61
+#define ENC_STEPS 4
 #endif
 #define ADC_ADDR 0x68
 #define RTC_ADDR 0x6F
@@ -34,67 +39,15 @@
 MCP4725 dac(DAC_ADDR);
 MCP342x adc = MCP342x(ADC_ADDR);
 MCP79410_Timer _rtcTimer(RTC_ADDR);
-//END ADC-DAC
-
-//BEGIN - LCD ###
-LiquidCrystal_PCF8574 lcd1(0x27);
-#define LCD_TEMP_MAX_UPDATE_RATE 200
-#define UM_TEMP 1 << 0
-#define UM_VOLTAGE 1 << 1
-#define UM_CURRENT 1 << 2
-#define UM_POWER 1 << 3
-#define UM_LOAD_ONOFF 1 << 4
-#define UM_TIME 1 << 5
-#define UM_MAH 1 << 6
-#define UM_CELLCOUNT 1 << 7
-uint8_t lcdRefreshMask = ~0;
-
-#define WORKINGMODE_COUNT 4
-#define MODE_CC 0
-#define MODE_CR 1
-#define MODE_CP 2
-#define MODE_BA 3
-const char *workingModes[WORKINGMODE_COUNT] = {"cC", "cR", "cP", "Ba"};
-const char *onOffChoices[] = {"On ", "Off"};
-const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
-#define BATT_TYPE_COUNT 2
-const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh"};
-const float battTypicalCellVoltage[BATT_TYPE_COUNT] = {3700, 1100};
-Menu *menu;
-MultiDigitValueMenuItem *setValueMenuItem = NULL;
-MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
-//END - LCD ###
-
-//BEGIN Flash
-#define FLASH_ADR 0x20000 //First memory availble after reserved for OTA update
-#define SETTINGS_VERSION 0x03
-struct Settings
-{
-  uint8_t version = (SETTINGS_VERSION << 1) + 0;              //LSB to 1 means dirty
-  uint8_t mode = 0;                                           //CC
-  uint16_t setValues[WORKINGMODE_COUNT] = {0, 1000, 50, 100}; //0mA 100Ω, 5W, 100mA
-  uint8_t backlight = 0;                                      //On
-  uint16_t r17Value = 1000;                                   //100mΩ
-  uint8_t battType = 0;                                       //Lipo
-  uint16_t battCutOff[2] = {32, 10};                          //3.2V 1.0V
-  uint16_t fanTemps[3] = {300, 400, 600};                     //30°C
-  uint8_t fanHysteresis = 10;                                 //1°C
-};
-struct Settings *settings = new Settings();
-
 SPIFlash flash(P_FLASH_SS, 0xEF30);
-//END FLash
+LiquidCrystal_PCF8574 lcd1(0x27);
 
-//BEGIN - Encoder ###
 ClickEncoder *encoder;
-#if DEBUG_BOARD
-#define ENC_STEPS 2
-#else
-#define ENC_STEPS 4
-#endif
-//END - Encoder ###
+OneButton *pushButton;
 
-//BEGIN - Load ###
+extern Menu *menu;
+const float battTypicalCellVoltage[BATT_TYPE_COUNT] = {3700, 1100};
+struct Settings *settings = new Settings();
 uint8_t battCellCount = 1;
 uint8_t fanLevel = 0;
 uint16_t readTemperature = 0; // 1/10 °C
@@ -102,226 +55,7 @@ int16_t readCurrent = 0;      // mA
 int16_t readVoltage = 0;      // mV
 bool swLoadOnOff = false;
 double totalmAh = 0;
-//END - Load ###
-
-OneButton *pushButton;
-
-void timerIsr();
-void setupMenu();
-void setOutput();
-void SetBacklight();
-void refreshDisplay();
-void loadButton_click();
-void loadButton_longClick();
-void selfTest();
-void setupLoadButton();
-void setupLoadButton();
-void SaveSettings();
-
-bool menu_modeChanged(int8_t newMode)
-{
-  settings->mode = newMode;
-  lcdRefreshMask |= UM_CELLCOUNT;
-  setValueMenuItem->SetValue(settings->setValues[settings->mode]);
-  setValueMenuItem->SetSuffix(modeUnits[newMode]);
-  switch (settings->mode)
-  {
-  case MODE_CC:
-  case MODE_BA:
-    setValueMenuItem->SetPrecision(3);
-    break;
-  case MODE_CR:
-  case MODE_CP:
-    setValueMenuItem->SetPrecision(1);
-    break;
-  }
-  menu->PrintItem(setValueMenuItem);
-  swLoadOnOff = false;
-  lcdRefreshMask |= UM_LOAD_ONOFF;
-  settings->version |= 0x01; //Set Dirty
-  return true;
-}
-
-bool menu_setValueChanged(int32_t newValue)
-{
-  if (newValue < 0)
-    return false;
-  if (newValue > 30000)
-    return false;
-  settings->setValues[settings->mode] = newValue;
-  settings->version |= 0x01;
-  return true;
-}
-
-void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
-{
-  lcd1.clear();
-  switch (newPageIndex)
-  {
-  case 0:
-    lcd1.setCursor(18, 0);
-    lcd1.print((char)0xDF);
-
-    lcd1.setCursor(5, 1);
-    lcd1.print("A");
-    lcd1.setCursor(13, 1);
-    lcd1.print("V");
-    lcd1.setCursor(19, 1);
-    lcd1.print("W");
-    lcd1.setCursor(17, 3);
-    lcd1.print("mAh");
-    lcdRefreshMask = ~0;
-    SaveSettings();
-    break;
-  }
-}
-
-bool menu_BackLightChanged(int8_t newValue)
-{
-  settings->backlight = newValue;
-  settings->version |= 0x01;
-  SetBacklight();
-  return true;
-}
-
-bool menu_FanOnTemp1Changed(int32_t newValue)
-{
-  if (newValue <= settings->fanTemps[1] && newValue >= 0)
-  {
-    settings->fanTemps[0] = newValue;
-    settings->version |= 0x01;
-    return true;
-  }
-  return false;
-}
-bool menu_FanOnTemp2Changed(int32_t newValue)
-{
-  if (newValue <= settings->fanTemps[2] && newValue >= settings->fanTemps[0])
-  {
-    settings->fanTemps[1] = newValue;
-    settings->version |= 0x01;
-    return true;
-  }
-  return false;
-}
-bool menu_FanOnTemp3Changed(int32_t newValue)
-{
-  if (newValue <= 1000 && newValue >= settings->fanTemps[1])
-  {
-    settings->fanTemps[2] = newValue;
-    settings->version |= 0x01;
-    return true;
-  }
-  return false;
-}
-
-bool menu_FanHysteresisChanged(int32_t newValue)
-{
-  if (newValue >= 0 && newValue < 100)
-  {
-    settings->fanHysteresis = newValue;
-    settings->version |= 0x01;
-    return true;
-  }
-  else if (newValue < 0 || newValue > 100)
-  {
-    settings->fanHysteresis = 10;
-  }
-  return false;
-}
-
-bool menu_R17Changed(int32_t newValue)
-{
-  if (newValue > 900 && newValue < 1100)
-  {
-    settings->r17Value = newValue;
-    settings->version |= 0x01;
-    return true;
-  }
-  return false;
-}
-
-bool menu_BattTypeChanged(int8_t newValue)
-{
-  if (newValue >= 0 && newValue < BATT_TYPE_COUNT)
-  {
-    settings->battType = newValue;
-    settings->version |= 0x01;
-    setBattCutOffMenuItem->SetValue(settings->battCutOff[settings->battType]);
-    return true;
-  }
-  return false;
-}
-
-bool menu_cutOffChanged(int32_t newValue)
-{
-  if (newValue >= 0 && newValue <= 50)
-  {
-    settings->battCutOff[settings->battType] = newValue;
-    settings->version |= 0x01;
-    return true;
-  }
-  return false;
-}
-
-void setupMenu()
-{
-  MultiDigitValueMenuItem *vmi;
-  MultiChoiceMenuItem *cmi;
-
-  menu = new Menu(3, 20);
-  //Page 0: Main Page
-  menu->AddPage();
-  cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 4, 0, menu_modeChanged, false);
-  cmi->currentChoiceIndex = settings->mode;
-  setValueMenuItem = menu->AddValue(settings->setValues[settings->mode], 6, 3, 0, 2, menu_setValueChanged);
-  setValueMenuItem->SetPrefix("Set:");
-  setValueMenuItem->SetSuffix(modeUnits[settings->mode]);
-
-  menu->AddGoToPage(1, "[Conf]", 14, 2);
-  //Page 1: Settings
-  menu->AddPage();
-  menu->AddGoToPage(0, "[Main]", 0, 0);
-  cmi = menu->AddMultiChoice(onOffChoices, 2, 0, 1, menu_BackLightChanged, true);
-  cmi->currentChoiceIndex = settings->backlight;
-  cmi->SetPrefix("Backlight   :");
-
-  vmi = menu->AddValue(settings->r17Value, 5, 1, 0, 2, menu_R17Changed);
-  vmi->SetPrefix("R17 Value   :");
-  vmi->SetSuffix("m\xF4");
-  cmi = menu->AddMultiChoice(battTypes, 2, 0, 3, menu_BattTypeChanged, true);
-  cmi->SetPrefix("Battery Type:");
-  cmi->currentChoiceIndex = settings->battType;
-
-  setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 4, 1, 0, 4, menu_cutOffChanged);
-  setBattCutOffMenuItem->SetPrefix("Batt Cut Off:");
-  setBattCutOffMenuItem->SetSuffix("V");
-  setBattCutOffMenuItem->DigitIndex = 1;
-
-  menu->AddGoToPage(2, "[Fan & Temp]", 0, 5);
-
-  //Page 2: Fan Management
-  menu->AddPage();
-  menu->AddGoToPage(1, "[Settings]", 0, 0);
-  vmi = menu->AddValue(settings->fanTemps[0], 4, 1, 0, 1, menu_FanOnTemp1Changed);
-  vmi->SetPrefix("Level 1 :");
-  vmi->SetSuffix("\xDF\x43");
-  vmi->DigitIndex = 1;
-  vmi = menu->AddValue(settings->fanTemps[1], 4, 1, 0, 2, menu_FanOnTemp2Changed);
-  vmi->SetPrefix("Level 2 :");
-  vmi->SetSuffix("\xDF\x43");
-  vmi->DigitIndex = 1;
-  vmi = menu->AddValue(settings->fanTemps[2], 4, 1, 0, 3, menu_FanOnTemp3Changed);
-  vmi->SetPrefix("Cut Off :");
-  vmi->SetSuffix("\xDF\x43");
-  vmi->DigitIndex = 1;
-  vmi = menu->AddValue(settings->fanHysteresis, 3, 1, 0, 4, menu_FanHysteresisChanged);
-  vmi->SetPrefix("Hysteresis:");
-  vmi->SetSuffix("\xDF\x43");
-  vmi->DigitIndex = 1;
-
-  menu->Configure(&lcd1, menu_pageChanged);
-}
+uint8_t lcdRefreshMask = ~0;
 
 void timerIsr()
 {
@@ -384,11 +118,6 @@ void SetBacklight()
 
 void refreshDisplay()
 {
-#if DEBUG_TIMINGS
-  static Statistic drawStats;
-  static unsigned long loopStart = 0;
-  loopStart = micros();
-#endif
   static char buffer[10];
   if (menu->GetCurrentPage() == 0)
   {
@@ -472,21 +201,6 @@ void refreshDisplay()
       lcdRefreshMask &= ~UM_TIME;
     }
   }
-#if DEBUG_TIMINGS
-  drawStats.add(micros() - loopStart);
-  if (DEBUG_TIMINGS && drawStats.count() == 5000)
-  {
-    Serial.print("RefeshLcd:");
-    Serial.print((uint16_t)drawStats.average());
-    Serial.print(" / ");
-    Serial.print((uint16_t)drawStats.minimum());
-    Serial.print("->");
-    Serial.print((uint16_t)drawStats.maximum());
-    Serial.print(" / ");
-    Serial.println((uint16_t)drawStats.variance());
-    drawStats.clear();
-  }
-#endif
 }
 
 void loadButton_click()
@@ -561,108 +275,93 @@ void selfTest()
 }
 
 //TODO : Auto Gain adjustment : For low voltage, 4x will increase resolution
-//TODO : Switch to continuous convertion
+//TODO : Manage error conditions
+enum adcStage
+{
+  runConvertCh1,
+  runConvertCh2,
+  readCh1,
+  readCh2
+};
 SMA<10, uint16_t, uint32_t> temperatureSMA;
 void actuateReadings()
 {
-  static MCP342x::Config ch1Config(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1);
-  static MCP342x::Config ch2Config(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain4);
-  static MCP342x::Config adcStatus;
-  static long adcValue;
-  static uint8_t adcErr;
-  static int8_t runConvertCh = 1;
+  static enum adcStage readingStage = runConvertCh1;
+
+  MCP342x::Config adcStatus;
+  long adcValue;
 
   //Temperature Reading
-
-  static unsigned long lastTempRead = 0;
-  if (lastTempRead + LCD_TEMP_MAX_UPDATE_RATE < millis())
+  static unsigned long lastTempUpdate = 0;
+  if (lastTempUpdate + LCD_TEMP_MAX_UPDATE_RATE < millis())
   {
-    readTemperature = temperatureSMA(analogRead(P_LM35)) * 4.83871;
-    lcdRefreshMask |= UM_TEMP;
-    lastTempRead = millis();
+    uint16_t newTemperature = temperatureSMA(analogRead(P_LM35)) * 4.83871;
+    if (newTemperature != readTemperature)
+    {
+      readTemperature = newTemperature;
+      lcdRefreshMask |= UM_TEMP;
+      lastTempUpdate = millis();
+    }
   }
 
   //Voltage & Current Reading (alternate)
-  if (runConvertCh == 1)
+  int16_t newCurrent = 0;
+  int16_t newVoltage = 0;
+  static unsigned long lastCurrentUpdate = 0;
+  static unsigned long lastVoltageUpdate = 0;
+  switch (readingStage)
   {
-    adcErr = adc.convert(ch1Config);
-    if (adcErr)
-      debug_printb(F("ADC-Ch1 Conv Err:"), "%i\n", adcErr);
-    runConvertCh = -1;
-  }
-  if (runConvertCh == 2)
-  {
-    adcErr = adc.convert(ch2Config);
-    if (adcErr)
-      debug_printb(F("ADC-Ch2 Conv Err:"), "%i\n", adcErr);
-    runConvertCh = -2;
-  }
-
-  if (runConvertCh == -1)
-  {
-    static int16_t newVoltage = 0;
-    adcErr = adc.read(adcValue, adcStatus);
+  case runConvertCh1:
+    adc.convert(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1);
+    readingStage = readCh1;
+    break;
+  case runConvertCh2:
+    adc.convert(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain4);
+    readingStage = readCh2;
+    break;
+  case readCh1:
+    adc.read(adcValue, adcStatus);
     if (adcStatus.isReady())
     {
-      if (adcErr)
+      if (adcValue < 0)
+        adcValue = 0;
+      newVoltage = adcValue * (2048.0 / 32768) * 50;
+      if (newVoltage != readVoltage || lastVoltageUpdate + 500 < millis())
       {
-        debug_printb(F("ADC-Ch1 Read Err:"), "%i\n", adcErr);
-      }
-      else
-      {
-        if (adcValue < 0)
-          adcValue = 0;
-        static unsigned long lastVoltageReading = 0;
-        newVoltage = adcValue * (2048.0 / 32768) * 50;
-        if (newVoltage != readVoltage || lastVoltageReading + 500 < millis())
+        if (settings->mode == MODE_BA)
         {
-          if (settings->mode == MODE_BA)
+          uint8_t bcc = round((float)newVoltage / battTypicalCellVoltage[settings->battType]);
+          if (bcc != battCellCount)
           {
-            uint8_t bcc = round((float)newVoltage / battTypicalCellVoltage[settings->battType]);
-            if (bcc != battCellCount)
-            {
-              battCellCount = bcc;
-              lcdRefreshMask |= UM_CELLCOUNT;
-            }
+            battCellCount = bcc;
+            lcdRefreshMask |= UM_CELLCOUNT;
           }
-          readVoltage = newVoltage;
-          lcdRefreshMask |= (UM_VOLTAGE | UM_POWER);
         }
+        readVoltage = newVoltage;
+        lcdRefreshMask |= (UM_VOLTAGE | UM_POWER);
+        lastVoltageUpdate = millis();
       }
-      runConvertCh = 2;
+      readingStage = runConvertCh2;
     }
-  }
-
-  if (runConvertCh == -2)
-  {
-    static int16_t newCurrent = 0;
-    adcErr = adc.read(adcValue, adcStatus);
+    break;
+  case readCh2:
+    adc.read(adcValue, adcStatus);
     if (adcStatus.isReady())
     {
-      if (adcErr)
+      if (adcValue < 0)
+        adcValue = 0;
+      newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / settings->r17Value);
+      if (newCurrent != readCurrent || lastCurrentUpdate + 500 < millis())
       {
-        debug_printb(F("ADC-Ch2 Read Err:"), "%i\n", adcErr);
+        if (swLoadOnOff)
+          totalmAh += readCurrent * (millis() - lastCurrentUpdate);
+        readCurrent = newCurrent;
+        lcdRefreshMask |= (UM_CURRENT | UM_POWER);
+        lastCurrentUpdate = millis();
       }
-      else
-      {
-        if (adcValue < 0)
-          adcValue = 0;
-        static unsigned long lastCurrentReading = 0;
-        newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / settings->r17Value);
-        if (newCurrent != readCurrent || lastCurrentReading + 500 < millis())
-        {
-          if (swLoadOnOff)
-          {
-            totalmAh += readCurrent * (millis() - lastCurrentReading);
-          }
-          readCurrent = newCurrent;
-
-          lcdRefreshMask |= (UM_CURRENT | UM_POWER);
-          lastCurrentReading = millis();
-        }
-      }
-      runConvertCh = 1;
+      readingStage = runConvertCh1;
     }
+    break;
   }
 }
 
@@ -690,31 +389,9 @@ void adjustFanSpeed()
   analogWrite(P_FAN, fanLevelPwm[fanLevel]);
 }
 
-Statistic flashClearStats;
-Statistic flashSaveStats;
-void SaveSettings()
-{
-  if (settings->version & 0x01)
-  {
-    unsigned long s = micros();
-    flash.blockErase4K(FLASH_ADR);
-    while (flash.busy())
-      ;
-    flashClearStats.add(micros() - s);
-    settings->version &= ~1; //Set Dirty flag to zero
-    s = micros();
-    flash.writeBytes(FLASH_ADR, settings, sizeof(Settings));
-    while (flash.busy())
-      ;
-    flashSaveStats.add(micros() - s);
-    debug_printb(F("Flash Stats (C/S):"), "%i/%i\n", flashClearStats.average(), flashSaveStats.average());
-  }
-}
-
 void setup()
 {
   Serial.begin(9600);
-
   // initialize the lcd
   lcd1.begin(20, 4);
   lcd1.setBacklight(255);
@@ -753,12 +430,8 @@ void setup()
   dac.begin();
 
   //Load Settings from Flash
-  flash.readBytes(FLASH_ADR, settings, sizeof(Settings));
-  if ((settings->version >> 1) != SETTINGS_VERSION)
+  if (!ReadSettings())
   {
-    debug_printa("Setting Ver NoMatch %X vs %X\n", settings->version >> 1, SETTINGS_VERSION);
-    free(settings);
-    settings = new Settings();
     //Enjoy this first booting time to setup DAC POR Value (1/2 ref voltage out of factory)
     dac.writeDAC(0, true);
     while (!dac.RDY())
@@ -781,6 +454,7 @@ void loop()
   static unsigned long loopStart = 0;
   loopStart = micros();
 #endif
+  static uint16_t loopCOunt = 0;
   static uint8_t buttonState;
   static uint8_t oldState = ClickEncoder::Open;
 
@@ -805,6 +479,13 @@ void loop()
   else if (buttonState == ClickEncoder::Held && oldState != ClickEncoder::Held)
     menu->LongClick();
   oldState = buttonState;
+
+  if (loopCOunt++ >= 5000)
+  {
+    Serial.print("Free:");
+    Serial.println(freeMemory());
+    loopCOunt = 0;
+  }
 
 #if DEBUG_TIMINGS
   loopStats.add(micros() - loopStart);

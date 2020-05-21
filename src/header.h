@@ -31,7 +31,10 @@
 #define UM_CURRENT (1 << 2)
 #define UM_LOAD_ONOFF (1 << 3)
 #define UM_TIME (1 << 4)
-#define UM_CELLCOUNT (1 << 5)
+#define UM_ALERT (1 << 5)
+
+#define STATE_ONOFF 1
+#define STATE_SUSPICIOUS_CELL_COUNT (1 << 3)
 
 #define BATT_TYPE_COUNT 4
 #define TRIGGER_TYPE_COUNT 3

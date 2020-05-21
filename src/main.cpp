@@ -48,22 +48,16 @@ extern Menu *menu;
 const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
 const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
 const char *triggerType[TRIGGER_TYPE_COUNT] = {"Man.", "Flip", "Timr"};
-const int8_t battMinVoltage[BATT_TYPE_COUNT] = {30, 8, 25, 18};  // 1/10th Volt
-const int8_t battMaxVoltage[BATT_TYPE_COUNT] = {42, 15, 36, 23}; // 1/10th Volt
 struct Settings *settings = new Settings();
-uint16_t readTemperature = 0; // 1/10 °C
-int16_t readCurrent = 0;      // mA
-int16_t readVoltage = 0;      // mV
+uint8_t readTemperature = 0; // 1/10 °C
+int16_t readCurrent = 0;     // mA
+int16_t readVoltage = 0;     // mV
 double totalmAh = 0;
 uint8_t lcdRefreshMask = 0;
 
 uint8_t state = 0;
-#define onOffState (state & 0x01)
-#define setOnOffState(s) state = ((state & ~0x01) | (s & 0x01))
 #define fanLevelState ((state >> 1) & 0x03)
 #define setFanLevel(l) state = (state & ~(0x03 << 1)) | ((l & 0x03) << 1)
-#define battCellCountState ((state >> 3) & 0x07)
-#define setBattCellCount(b) state = (state & ~(0x07 << 3)) | ((b & 0x07) << 3)
 
 void timerIsr()
 {
@@ -72,7 +66,7 @@ void timerIsr()
 
 void LoadOn()
 {
-  setOnOffState(1);
+  state |= STATE_ONOFF;
   digitalWrite(P_LOADON_LED, HIGH);
   lcdRefreshMask |= UM_LOAD_ONOFF;
   setOutput();
@@ -81,7 +75,7 @@ void LoadOn()
 
 void LoadOff()
 {
-  setOnOffState(0);
+  state &= ~STATE_ONOFF;
   digitalWrite(P_LOADON_LED, LOW);
   lcdRefreshMask |= UM_LOAD_ONOFF;
   setOutput();
@@ -90,7 +84,7 @@ void LoadOff()
 
 void setOutput()
 {
-  if (onOffState)
+  if (state & STATE_ONOFF)
   {
     double newDacValue = 0; //Output in mV
     double set = settings->setValues[settings->mode];
@@ -126,43 +120,24 @@ void SetBacklight()
 
 void refreshDisplay()
 {
-  lcdRefreshMask &= UM_TEMP | UM_VOLTAGE | UM_CURRENT | UM_TIME | UM_LOAD_ONOFF | UM_CELLCOUNT;
+  lcdRefreshMask &= (UM_TEMP | UM_VOLTAGE | UM_CURRENT | UM_TIME | UM_LOAD_ONOFF | UM_ALERT);
   if (lcdRefreshMask == 0 || menu->GetCurrentPage() != 0)
     return;
-
   static char buffer[10];
+
   //Load On Off
   if (lcdRefreshMask & UM_LOAD_ONOFF)
   {
     lcd1.setCursor(0, 0);
-    lcd1.print(onOffState ? F("On :") : F("Off:"));
+    lcd1.print(state & STATE_ONOFF ? F("On :") : F("Off:"));
     lcdRefreshMask &= ~UM_LOAD_ONOFF;
-  }
-
-  //Bat cell Count
-  if (lcdRefreshMask & UM_CELLCOUNT)
-  {
-    lcd1.setCursor(7, 0);
-    if (settings->mode == MODE_BA)
-    {
-      if (battCellCountState)
-        lcd1.print(battCellCountState);
-      else
-        lcd1.print(F("?"));
-      lcd1.write((uint8_t)SC_BATT);
-    }
-    else
-    {
-      lcd1.print(F("  "));
-    }
-    lcdRefreshMask &= ~UM_CELLCOUNT;
   }
 
   //Temp
   if (lcdRefreshMask & UM_TEMP)
   {
-    lcd1.setCursor(13, 0);
-    lcd1.print(dtostrf((double)readTemperature / 10, 5, 1, buffer));
+    lcd1.setCursor(16, 0);
+    lcd1.print(readTemperature);
     lcd1.setCursor(19, 0);
     lcd1.write(SC_THERMO_L0 + fanLevelState);
     lcdRefreshMask &= ~UM_TEMP;
@@ -206,13 +181,20 @@ void refreshDisplay()
     lcdRefreshMask &= ~UM_TIME;
   }
 
+  if (lcdRefreshMask & UM_ALERT)
+  {
+    lcd1.setCursor(9, 0);
+    lcd1.print(state & STATE_SUSPICIOUS_CELL_COUNT ? "!" : " ");
+    lcdRefreshMask &= ~UM_ALERT;
+  }
+
   //Cursor
   menu->PrintCursor();
 }
 
 void loadButton_click()
 {
-  if (onOffState)
+  if (state & STATE_ONOFF)
     LoadOff();
   else
     LoadOn();
@@ -221,7 +203,7 @@ void loadButton_click()
 
 void loadButton_longClick()
 {
-  if (!onOffState)
+  if (!(state & STATE_ONOFF))
   {
     _rtcTimer.reset();
     totalmAh = 0;
@@ -280,18 +262,15 @@ void selfTest()
   debug_print("Self test done\n");
 }
 
-void guessBattCellCount()
+void DetectSuspiciousCellCount()
 {
-  uint16_t min = 100 * battMinVoltage[settings->battType];
-  uint16_t max = 100 * battMaxVoltage[settings->battType];
-  int16_t bcc = round((float)readVoltage / ((max + min) / 2));
-  if (readVoltage <= bcc * min || readVoltage >= bcc * max)
-    bcc = 0;
-
-  if (bcc != battCellCountState)
+  int16_t min = settings->battCellCount * battMinVoltage[settings->battType] * 100;
+  int16_t max = settings->battCellCount * battMaxVoltage[settings->battType] * 100;
+  bool suspicious = readVoltage < min || readVoltage > max;
+  if (suspicious != (state & STATE_SUSPICIOUS_CELL_COUNT))
   {
-    setBattCellCount(bcc);
-    lcdRefreshMask |= UM_CELLCOUNT;
+    lcdRefreshMask |= UM_ALERT;
+    state = suspicious ? state | STATE_SUSPICIOUS_CELL_COUNT : state & ~STATE_SUSPICIOUS_CELL_COUNT;
   }
 }
 
@@ -304,7 +283,7 @@ enum adcStage
   readCh1,
   readCh2
 };
-SMA<10, uint16_t, uint32_t> temperatureSMA;
+SMA<10, uint8_t, uint16_t> temperatureSMA;
 void actuateReadings()
 {
   static enum adcStage readingStage = runConvertCh1;
@@ -316,13 +295,13 @@ void actuateReadings()
   static unsigned long lastTempUpdate = 0;
   if (lastTempUpdate + LCD_TEMP_MAX_UPDATE_RATE < millis())
   {
-    uint16_t newTemperature = temperatureSMA(analogRead(P_LM35)) * 4.83871;
+    uint8_t newTemperature = temperatureSMA(analogRead(P_LM35)) * 0.32258; // 3.3V / 1023 * 100°C/V * 10
     if (newTemperature != readTemperature)
     {
       readTemperature = newTemperature;
       lcdRefreshMask |= UM_TEMP;
-      lastTempUpdate = millis();
     }
+    lastTempUpdate = millis();
   }
 
   //Voltage & Current Reading (alternate)
@@ -350,8 +329,8 @@ void actuateReadings()
       if (newVoltage != readVoltage || lastVoltageUpdate + 500 < millis())
       {
         readVoltage = newVoltage;
-        if (!onOffState && settings->mode == MODE_BA)
-          guessBattCellCount();
+        if (settings->mode == MODE_BA)
+          DetectSuspiciousCellCount();
         lcdRefreshMask |= UM_VOLTAGE;
         lastVoltageUpdate = millis();
       }
@@ -367,7 +346,7 @@ void actuateReadings()
       newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / settings->r17Value);
       if (newCurrent != readCurrent || lastCurrentUpdate + 500 < millis())
       {
-        if (onOffState)
+        if (state & STATE_ONOFF)
           totalmAh += readCurrent * (millis() - lastCurrentUpdate);
         readCurrent = newCurrent;
         lcdRefreshMask |= UM_CURRENT;
@@ -479,10 +458,9 @@ void loop()
     setFanLevel(3);
     LoadOff();
   }
-  if (settings->mode == MODE_BA)
-
+  if (state & STATE_ONOFF && settings->mode == MODE_BA)
   {
-    int16_t cutOffVoltage = battCellCountState * settings->battCutOff[settings->battType];
+    int16_t cutOffVoltage = settings->battCellCount * settings->battCutOff[settings->battType];
     if (readVoltage < cutOffVoltage)
       LoadOff();
   }

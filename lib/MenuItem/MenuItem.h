@@ -4,8 +4,7 @@
 #include <Arduino.h>
 #include <LiquidCrystal_PCF8574.h>
 
-#define UM_PREFIX 1 << 0
-#define UM_SUFFIX 1 << 1
+#define IS_SHOW 1
 
 class MenuItem
 {
@@ -31,6 +30,10 @@ public:
     virtual bool Click(bool *focus, uint8_t *page) { return false; };
     virtual bool LongClick(bool *focus, uint8_t *page) { return false; };
 
+    virtual void Hide() { _state &= ~IS_SHOW; }
+    virtual void Show();
+    virtual bool IsShown();
+
     uint8_t getCx() { return cursor % 20; }
     uint8_t getCy() { return cursor / 20; }
     void setCx(uint8_t x) { cursor = cursor / 20 + x; }
@@ -40,7 +43,7 @@ protected:
     const __FlashStringHelper *_prefix = NULL;
     uint8_t _prefixLenth;
     const char *_suffix = NULL;
-    uint8_t _updateMask = 0;
+    uint8_t _state = IS_SHOW;
 
 private:
     uint8_t cursor = 0;

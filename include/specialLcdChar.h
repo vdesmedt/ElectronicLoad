@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <LiquidCrystal_PCF8574.h>
-#define SC_BATT 0
+#define SC_BATT 7
 #define SC_MENU_UP 1
 #define SC_THERMO_L0 2
 #define SC_THERMO_L1 3

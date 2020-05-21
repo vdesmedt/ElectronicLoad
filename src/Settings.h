@@ -7,7 +7,7 @@
 #include <debug.h>
 #include <SPIFlash.h>
 
-#define SETTINGS_VERSION 0x05
+#define SETTINGS_VERSION 0x07
 
 struct Settings
 {
@@ -17,11 +17,13 @@ struct Settings
     uint8_t backlight = 0;                                      //On
     uint16_t r17Value = 1000;                                   //100mΩ
     uint8_t battType = 0;                                       //Lipo
+    uint8_t battCellCount = 1;                                  //Cell Count
     uint16_t battCutOff[2] = {3200, 1000};                      //3.2V 1.0V
     uint16_t fanTemps[3] = {300, 400, 600};                     //30°C
     uint8_t fanHysteresis = 10;                                 //1°C
     uint8_t triggerType = 0;                                    //Manual, FlipFlop, Timer
     uint16_t triggerTimer = 1000;                               //Milliseconds
+    uint8_t loggingType = 0;                                    //Loggin type (None, Serial, RFM69)
 };
 
 extern Settings *settings;

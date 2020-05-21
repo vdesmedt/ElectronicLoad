@@ -22,10 +22,18 @@ void MenuItem::SetPrefix(const __FlashStringHelper *prefix)
 {
     _prefix = prefix;
     _prefixLenth = getLength(prefix);
-    _updateMask |= UM_PREFIX;
 }
 void MenuItem::SetSuffix(const char *suffix)
 {
     _suffix = suffix;
-    _updateMask |= UM_SUFFIX;
+}
+
+void MenuItem::Show()
+{
+    _state |= IS_SHOW;
+}
+
+bool MenuItem::IsShown()
+{
+    return _state & IS_SHOW;
 }

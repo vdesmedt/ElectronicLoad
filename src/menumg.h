@@ -6,6 +6,7 @@
 Menu *menu;
 MultiDigitValueMenuItem *setValueMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
+MultiDigitValueMenuItem *setBattCellCountMenuItem = NULL;
 
 void LoadOff();
 
@@ -18,6 +19,27 @@ const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
 extern const char *battTypes[];
 extern const char *triggerType[];
+extern uint8_t state;
+
+const int8_t battMinVoltage[BATT_TYPE_COUNT] = {30, 8, 25, 18};  // 1/10th Volt
+const int8_t battMaxVoltage[BATT_TYPE_COUNT] = {42, 15, 36, 23}; // 1/10th Volt
+bool menu_battCellCountChanged(int32_t newValue)
+{
+    if (newValue > 0 & newValue <= 8)
+    {
+        settings->battCellCount = newValue;
+        settings->version |= 0x01; //Set Dirty
+        return true;
+    }
+    return false;
+}
+
+bool menu_LoggingChanged(int8_t newValue)
+{
+    settings->loggingType = newValue;
+    settings->version |= 0x01; //Set Dirty
+    return true;
+}
 
 bool menu_triggerTimeChanged(int32_t newValue)
 {
@@ -32,7 +54,6 @@ bool menu_triggerTypeChanged(int8_t newTriggerType)
 bool menu_modeChanged(int8_t newMode)
 {
     settings->mode = newMode;
-    lcdRefreshMask |= UM_CELLCOUNT;
     setValueMenuItem->SetValue(settings->setValues[settings->mode]);
     setValueMenuItem->SetSuffix(modeUnits[newMode]);
     switch (settings->mode)
@@ -46,9 +67,24 @@ bool menu_modeChanged(int8_t newMode)
         setValueMenuItem->SetPrecision(1);
         break;
     }
+
+    if (newMode == MODE_BA)
+    {
+        setBattCellCountMenuItem->Show();
+        menu->PrintItem(setBattCellCountMenuItem);
+    }
+    else
+    {
+        setBattCellCountMenuItem->Hide();
+        lcd1.setCursor(7, 0);
+        lcd1.print(F("  "));
+        menu->PrintCursor();
+        state &= ~STATE_SUSPICIOUS_CELL_COUNT;
+        lcdRefreshMask |= UM_ALERT;
+    }
+
     menu->PrintItem(setValueMenuItem);
     LoadOff();
-    lcdRefreshMask |= UM_LOAD_ONOFF;
     settings->version |= 0x01; //Set Dirty
     return true;
 }
@@ -186,6 +222,10 @@ void setupMenu()
     menu->AddPage();
     cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 4, 0, menu_modeChanged, false);
     cmi->currentChoiceIndex = settings->mode;
+
+    setBattCellCountMenuItem = menu->AddValue(settings->battCellCount, 1, 0, 7, 0, menu_battCellCountChanged);
+    setBattCellCountMenuItem->SetSuffix("\x07");
+
     setValueMenuItem = menu->AddValue(settings->setValues[settings->mode], 6, 3, 0, 2, menu_setValueChanged);
     setValueMenuItem->SetPrefix(F("Set:"));
     setValueMenuItem->SetSuffix(modeUnits[settings->mode]);
@@ -194,6 +234,10 @@ void setupMenu()
     //Page 1: Settings
     menu->AddPage();
     menu->AddGoToPage(0, "[\x01Main]", 0, y++);
+
+    cmi = menu->AddMultiChoice(onOffChoices, 2, 0, y++, menu_LoggingChanged, true);
+    cmi->SetPrefix(F("Logging     :"));
+    cmi->currentChoiceIndex = settings->loggingType;
 
     cmi = menu->AddMultiChoice(triggerType, TRIGGER_TYPE_COUNT, 0, y++, menu_triggerTypeChanged, true);
     cmi->SetPrefix(F("Trigger Type:"));

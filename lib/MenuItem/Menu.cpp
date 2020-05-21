@@ -122,10 +122,13 @@ void Menu::Print()
 
 void Menu::PrintItem(MenuItem *mi)
 {
-    _lcd->setCursor(mi->getCx(), mi->getCy() - _scrollLevel);
-    _lcd->print(mi->GetPrefix());
-    _lcd->print(mi->GetLabel());
-    _lcd->print(mi->GetSufix());
+    if (mi->IsShown())
+    {
+        _lcd->setCursor(mi->getCx(), mi->getCy() - _scrollLevel);
+        _lcd->print(mi->GetPrefix());
+        _lcd->print(mi->GetLabel());
+        _lcd->print(mi->GetSufix());
+    }
 }
 
 void Menu::PrintCursor()

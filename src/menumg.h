@@ -17,6 +17,17 @@ const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
 const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
 const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
+const char *triggerType[TRIGGER_TYPE_COUNT] = {"Man.", "Flip", "Timr"};
+
+bool menu_triggerTimeChanged(int32_t newValue)
+{
+    return true;
+}
+
+bool menu_triggerTypeChanged(int8_t newTriggerType)
+{
+    return true;
+}
 
 bool menu_modeChanged(int8_t newMode)
 {
@@ -167,8 +178,8 @@ void setupMenu()
 {
     MultiDigitValueMenuItem *vmi;
     MultiChoiceMenuItem *cmi;
-
-    menu = new Menu(3, 20);
+    uint8_t y = 0;
+    menu = new Menu(4, 20);
     //Page 0: Main Page
     menu->AddPage();
     cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 4, 0, menu_modeChanged, false);
@@ -180,44 +191,58 @@ void setupMenu()
     menu->AddGoToPage(1, "[Conf]", 14, 2);
     //Page 1: Settings
     menu->AddPage();
-    menu->AddGoToPage(0, "[Main]", 0, 0);
-    cmi = menu->AddMultiChoice(onOffChoices, 2, 0, 1, menu_BackLightChanged, true);
-    cmi->currentChoiceIndex = settings->backlight;
-    cmi->SetPrefix(F("Backlight   :"));
+    menu->AddGoToPage(0, "[\x01Main]", 0, y++);
 
-    vmi = menu->AddValue(settings->r17Value, 5, 1, 0, 2, menu_R17Changed);
-    vmi->SetPrefix(F("R17 Value   :"));
-    vmi->SetSuffix("m\xF4");
-    cmi = menu->AddMultiChoice(battTypes, 2, 0, 3, menu_BattTypeChanged, true);
+    cmi = menu->AddMultiChoice(triggerType, TRIGGER_TYPE_COUNT, 0, y++, menu_triggerTypeChanged, true);
+    cmi->SetPrefix(F("Trigger Type:"));
+    cmi->currentChoiceIndex = settings->triggerType;
+
+    vmi = menu->AddValue(settings->triggerTimer, 6, 3, 0, y++, menu_triggerTimeChanged);
+    vmi->SetPrefix(F("Trg Timer:"));
+
+    cmi = menu->AddMultiChoice(battTypes, BATT_TYPE_COUNT, 0, y++, menu_BattTypeChanged, true);
     cmi->SetPrefix(F("Battery Type:"));
     cmi->currentChoiceIndex = settings->battType;
 
-    setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 4, 1, 0, 4, menu_cutOffChanged);
+    setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 4, 1, 0, y++, menu_cutOffChanged);
     setBattCutOffMenuItem->SetPrefix(F("Batt Cut Off:"));
     setBattCutOffMenuItem->SetSuffix("V");
     setBattCutOffMenuItem->DigitIndex = 1;
 
-    menu->AddGoToPage(2, "[Fan & Temp]", 0, 5);
+    menu->AddGoToPage(2, "[Finetune]", 0, y++);
 
-    //Page 2: Fan Management
+    //Page 2: Finetune
     menu->AddPage();
-    menu->AddGoToPage(1, "[Settings]", 0, 0);
-    vmi = menu->AddValue(settings->fanTemps[0], 4, 1, 0, 1, menu_FanOnTemp1Changed);
-    vmi->SetPrefix(F("Level 1 :"));
+    y = 0;
+    menu->AddGoToPage(1, "[\x01Settings]", 0, y++);
+
+    vmi = menu->AddValue(settings->r17Value, 5, 1, 0, y++, menu_R17Changed);
+    vmi->SetPrefix(F("R17 Value   :"));
+    vmi->SetSuffix("m\xF4");
+
+    vmi = menu->AddValue(settings->fanTemps[0], 4, 1, 0, y++, menu_FanOnTemp1Changed);
+    vmi->SetPrefix(F("Fan Level 1 :"));
     vmi->SetSuffix("\xDF\x43");
     vmi->DigitIndex = 1;
-    vmi = menu->AddValue(settings->fanTemps[1], 4, 1, 0, 2, menu_FanOnTemp2Changed);
-    vmi->SetPrefix(F("Level 2 :"));
+
+    vmi = menu->AddValue(settings->fanTemps[1], 4, 1, 0, y++, menu_FanOnTemp2Changed);
+    vmi->SetPrefix(F("Fan Level 2 :"));
     vmi->SetSuffix("\xDF\x43");
     vmi->DigitIndex = 1;
-    vmi = menu->AddValue(settings->fanTemps[2], 4, 1, 0, 3, menu_FanOnTemp3Changed);
-    vmi->SetPrefix(F("Cut Off :"));
+
+    vmi = menu->AddValue(settings->fanTemps[2], 4, 1, 0, y++, menu_FanOnTemp3Changed);
+    vmi->SetPrefix(F("Cut Off     :"));
     vmi->SetSuffix("\xDF\x43");
     vmi->DigitIndex = 1;
-    vmi = menu->AddValue(settings->fanHysteresis, 3, 1, 0, 4, menu_FanHysteresisChanged);
-    vmi->SetPrefix(F("Hysteresis:"));
+
+    vmi = menu->AddValue(settings->fanHysteresis, 3, 1, 0, y++, menu_FanHysteresisChanged);
+    vmi->SetPrefix(F("Hysteresis  :"));
     vmi->SetSuffix("\xDF\x43");
     vmi->DigitIndex = 1;
+
+    cmi = menu->AddMultiChoice(onOffChoices, 2, 0, y++, menu_BackLightChanged, true);
+    cmi->currentChoiceIndex = settings->backlight;
+    cmi->SetPrefix(F("Backlight   :"));
 
     menu->Configure(&lcd1, menu_pageChanged);
 }

@@ -36,6 +36,7 @@
 #define UM_CELLCOUNT 1 << 7
 
 #define BATT_TYPE_COUNT 4
+#define TRIGGER_TYPE_COUNT 3
 #define WORKINGMODE_COUNT 4
 #define MODE_CC 0
 #define MODE_CR 1

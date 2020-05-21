@@ -7,7 +7,7 @@
 #include <debug.h>
 #include <SPIFlash.h>
 
-#define SETTINGS_VERSION 0x03
+#define SETTINGS_VERSION 0x05
 
 struct Settings
 {
@@ -20,6 +20,8 @@ struct Settings
     uint16_t battCutOff[2] = {32, 10};                          //3.2V 1.0V
     uint16_t fanTemps[3] = {300, 400, 600};                     //30°C
     uint8_t fanHysteresis = 10;                                 //1°C
+    uint8_t triggerType = 0;                                    //Manual, FlipFlop, Timer
+    uint16_t triggerTimer = 1000;                               //Milliseconds
 };
 
 extern Settings *settings;

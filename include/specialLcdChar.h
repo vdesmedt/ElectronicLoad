@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <LiquidCrystal_PCF8574.h>
 #define SC_BATT 0
+#define SC_MENU_UP 1
 #define SC_THERMO_L0 2
 #define SC_THERMO_L1 3
 #define SC_THERMO_L2 4
@@ -45,7 +46,7 @@ void setupSPecialLcdChars(LiquidCrystal_PCF8574 *lcd1)
         B11111,
         B11111,
         B01110};
-    byte Batt[] = {
+    byte batt[] = {
         B00110,
         B01111,
         B01001,
@@ -54,7 +55,17 @@ void setupSPecialLcdChars(LiquidCrystal_PCF8574 *lcd1)
         B01111,
         B01111,
         B00000};
-    lcd1->createChar(SC_BATT, Batt);
+    byte menuUp[] = {
+        B00100,
+        B01110,
+        B10101,
+        B00100,
+        B11100,
+        B00000,
+        B00000,
+        B00000};
+    lcd1->createChar(SC_BATT, batt);
+    lcd1->createChar(SC_MENU_UP, menuUp);
     lcd1->createChar(SC_THERMO_L0, thermo_l0);
     lcd1->createChar(SC_THERMO_L1, thermo_l1);
     lcd1->createChar(SC_THERMO_L2, thermo_l2);

@@ -26,12 +26,12 @@
 #define FLASH_ADR 0x20000 //First memory availble after reserved for OTA update
 
 #define LCD_TEMP_MAX_UPDATE_RATE 1000
-#define UM_TEMP 1 << 0
-#define UM_VOLTAGE 1 << 1
-#define UM_CURRENT 1 << 2
-#define UM_LOAD_ONOFF 1 << 4
-#define UM_TIME 1 << 5
-#define UM_CELLCOUNT 1 << 6
+#define UM_TEMP (1 << 0)
+#define UM_VOLTAGE (1 << 1)
+#define UM_CURRENT (1 << 2)
+#define UM_LOAD_ONOFF (1 << 3)
+#define UM_TIME (1 << 4)
+#define UM_CELLCOUNT (1 << 5)
 
 #define BATT_TYPE_COUNT 4
 #define TRIGGER_TYPE_COUNT 3

@@ -13,11 +13,11 @@ extern Settings *settings;
 extern uint8_t lcdRefreshMask;
 extern LiquidCrystal_PCF8574 lcd1;
 
-const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
+extern const char *workingModes[];
 const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
-const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
-const char *triggerType[TRIGGER_TYPE_COUNT] = {"Man.", "Flip", "Timr"};
+extern const char *battTypes[];
+extern const char *triggerType[];
 
 bool menu_triggerTimeChanged(int32_t newValue)
 {
@@ -73,16 +73,16 @@ void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
         lcd1.print((char)0xDF);
 
         lcd1.setCursor(5, 1);
-        lcd1.print("A");
+        lcd1.print(F("A"));
         lcd1.setCursor(13, 1);
-        lcd1.print("V");
+        lcd1.print(F("V"));
         lcd1.setCursor(19, 1);
-        lcd1.print("W");
+        lcd1.print(F("W"));
         lcd1.setCursor(17, 3);
-        lcd1.print("mAh");
+        lcd1.print(F("mAh"));
         lcd1.setCursor(0, 3);
         lcd1.write(SC_WATCH);
-        lcdRefreshMask = ~0;
+        lcdRefreshMask = 0xFF;
         SaveSettings();
         break;
     }
@@ -167,7 +167,7 @@ bool menu_BattTypeChanged(int8_t newValue)
 
 bool menu_cutOffChanged(int32_t newValue)
 {
-    if (newValue >= 0 && newValue <= 50)
+    if (newValue >= 0 && newValue <= 5000)
     {
         settings->battCutOff[settings->battType] = newValue;
         settings->version |= 0x01;
@@ -206,7 +206,7 @@ void setupMenu()
     cmi->SetPrefix(F("Battery Type:"));
     cmi->currentChoiceIndex = settings->battType;
 
-    setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 4, 1, 0, y++, menu_cutOffChanged);
+    setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 5, 3, 0, y++, menu_cutOffChanged);
     setBattCutOffMenuItem->SetPrefix(F("Batt Cut Off:"));
     setBattCutOffMenuItem->SetSuffix("V");
     setBattCutOffMenuItem->DigitIndex = 1;

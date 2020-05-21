@@ -17,7 +17,7 @@ struct Settings
     uint8_t backlight = 0;                                      //On
     uint16_t r17Value = 1000;                                   //100mΩ
     uint8_t battType = 0;                                       //Lipo
-    uint16_t battCutOff[2] = {32, 10};                          //3.2V 1.0V
+    uint16_t battCutOff[2] = {3200, 1000};                      //3.2V 1.0V
     uint16_t fanTemps[3] = {300, 400, 600};                     //30°C
     uint8_t fanHysteresis = 10;                                 //1°C
     uint8_t triggerType = 0;                                    //Manual, FlipFlop, Timer

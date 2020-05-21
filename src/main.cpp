@@ -123,7 +123,7 @@ void SetBacklight()
 void refreshDisplay()
 {
   static char buffer[10];
-  if (menu->GetCurrentPage() == 0)
+  if (lcdRefreshMask && menu->GetCurrentPage() == 0)
   {
     //Load On Off
     if (lcdRefreshMask & UM_LOAD_ONOFF)
@@ -131,7 +131,6 @@ void refreshDisplay()
       lcd1.setCursor(0, 0);
       lcd1.print(onOffState ? "On :" : "Off:");
       lcdRefreshMask &= ~UM_LOAD_ONOFF;
-      menu->PrintCursor();
     }
 
     //Bat cell Count
@@ -148,7 +147,6 @@ void refreshDisplay()
         lcd1.print("      ");
       }
       lcdRefreshMask &= ~UM_CELLCOUNT;
-      menu->PrintCursor();
     }
 
     //Temp
@@ -159,50 +157,48 @@ void refreshDisplay()
       lcd1.setCursor(19, 0);
       lcd1.write(SC_THERMO_L0 + fanLevelState);
       lcdRefreshMask &= ~UM_TEMP;
-      menu->PrintCursor();
     }
 
     //Readings
-    if (lcdRefreshMask & UM_CURRENT)
+    if (lcdRefreshMask & (UM_CURRENT | UM_VOLTAGE))
     {
-      lcd1.setCursor(0, 1);
-      lcd1.print(dtostrf((double)readCurrent / 1000, 5, 3, buffer));
-      lcdRefreshMask &= ~UM_CURRENT;
-      menu->PrintCursor();
-    }
-    if (lcdRefreshMask & UM_VOLTAGE)
-    {
-      lcd1.setCursor(7, 1);
-      lcd1.print(dtostrf((double)readVoltage / 1000, 6, 3, buffer));
-      lcdRefreshMask &= ~UM_VOLTAGE;
-      menu->PrintCursor();
-    }
-    if (lcdRefreshMask & UM_POWER)
-    {
+      if (lcdRefreshMask & UM_CURRENT)
+      {
+        lcd1.setCursor(0, 1);
+        lcd1.print(dtostrf((double)readCurrent / 1000, 5, 3, buffer));
+        lcdRefreshMask &= ~UM_CURRENT;
+      }
+      if (lcdRefreshMask & UM_VOLTAGE)
+      {
+        lcd1.setCursor(7, 1);
+        lcd1.print(dtostrf((double)readVoltage / 1000, 6, 3, buffer));
+        lcdRefreshMask &= ~UM_VOLTAGE;
+      }
       lcd1.setCursor(15, 1);
       lcd1.print(dtostrf((double)readVoltage * readCurrent / 1000000, 4, 1, buffer));
-      lcdRefreshMask &= ~UM_POWER;
-      menu->PrintCursor();
     }
 
     //Time
     static unsigned long lastTotalSec = 0;
     static unsigned long lastTmUpdate = 0;
-    if (lcdRefreshMask & UM_TIME || (lastTmUpdate + 200 < millis() && lastTotalSec != _rtcTimer.getTotalSeconds()))
+    if ((lcdRefreshMask & UM_TIME) || (lastTmUpdate + 200 < millis() && lastTotalSec != _rtcTimer.getTotalSeconds()))
     {
-      static char buffer[10];
-      lcd1.setCursor(0, 3);
+      lcd1.setCursor(1, 3);
       _rtcTimer.getTime(buffer);
       lcd1.print(buffer);
+
+      lastTotalSec = _rtcTimer.getTotalSeconds();
+      lastTmUpdate = millis();
+
       lcd1.setCursor(10, 3);
       dtostrf(totalmAh / 3600000, 7, 1, buffer);
       lcd1.print(buffer);
 
-      menu->PrintCursor();
-      lastTotalSec = _rtcTimer.getTotalSeconds();
-      lastTmUpdate = millis();
       lcdRefreshMask &= ~UM_TIME;
     }
+
+    //Cursor
+    menu->PrintCursor();
   }
 }
 
@@ -340,7 +336,7 @@ void actuateReadings()
           }
         }
         readVoltage = newVoltage;
-        lcdRefreshMask |= (UM_VOLTAGE | UM_POWER);
+        lcdRefreshMask |= UM_VOLTAGE;
         lastVoltageUpdate = millis();
       }
       readingStage = runConvertCh2;
@@ -358,7 +354,7 @@ void actuateReadings()
         if (onOffState)
           totalmAh += readCurrent * (millis() - lastCurrentUpdate);
         readCurrent = newCurrent;
-        lcdRefreshMask |= (UM_CURRENT | UM_POWER);
+        lcdRefreshMask |= UM_CURRENT;
         lastCurrentUpdate = millis();
       }
       readingStage = runConvertCh1;

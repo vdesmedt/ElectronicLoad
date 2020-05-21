@@ -6,6 +6,7 @@
 #define SC_THERMO_L1 3
 #define SC_THERMO_L2 4
 #define SC_THERMO_L3 5
+#define SC_WATCH 6
 void setupSPecialLcdChars(LiquidCrystal_PCF8574 *lcd1)
 {
     byte thermo_l0[]{
@@ -64,10 +65,20 @@ void setupSPecialLcdChars(LiquidCrystal_PCF8574 *lcd1)
         B00000,
         B00000,
         B00000};
+    byte watch[] = {
+        B00000,
+        B01110,
+        B10011,
+        B10101,
+        B10001,
+        B01110,
+        B00000,
+        B00000};
     lcd1->createChar(SC_BATT, batt);
     lcd1->createChar(SC_MENU_UP, menuUp);
     lcd1->createChar(SC_THERMO_L0, thermo_l0);
     lcd1->createChar(SC_THERMO_L1, thermo_l1);
     lcd1->createChar(SC_THERMO_L2, thermo_l2);
     lcd1->createChar(SC_THERMO_L3, thermo_l3);
+    lcd1->createChar(SC_WATCH, watch);
 }

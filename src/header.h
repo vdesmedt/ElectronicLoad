@@ -29,11 +29,9 @@
 #define UM_TEMP 1 << 0
 #define UM_VOLTAGE 1 << 1
 #define UM_CURRENT 1 << 2
-#define UM_POWER 1 << 3
 #define UM_LOAD_ONOFF 1 << 4
 #define UM_TIME 1 << 5
-#define UM_MAH 1 << 6
-#define UM_CELLCOUNT 1 << 7
+#define UM_CELLCOUNT 1 << 6
 
 #define BATT_TYPE_COUNT 4
 #define TRIGGER_TYPE_COUNT 3

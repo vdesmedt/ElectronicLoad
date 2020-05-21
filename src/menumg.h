@@ -80,6 +80,8 @@ void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
         lcd1.print("W");
         lcd1.setCursor(17, 3);
         lcd1.print("mAh");
+        lcd1.setCursor(0, 3);
+        lcd1.write(SC_WATCH);
         lcdRefreshMask = ~0;
         SaveSettings();
         break;

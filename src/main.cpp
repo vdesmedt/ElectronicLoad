@@ -1,6 +1,7 @@
 #define DEBUG_BOARD false
 #define EDCL_DEBUG false
 #define DEBUG_TIMINGS EDCL_DEBUG && false
+#define DEBUG_MEMORY EDCL_DEBUG && true
 
 #include <Wire.h>
 #include <Arduino.h>
@@ -348,9 +349,9 @@ void actuateReadings()
       {
         if (state & STATE_ONOFF)
           totalmAh += readCurrent * (millis() - lastCurrentUpdate);
+        lastCurrentUpdate = millis();
         readCurrent = newCurrent;
         lcdRefreshMask |= UM_CURRENT;
-        lastCurrentUpdate = millis();
       }
       readingStage = runConvertCh1;
     }
@@ -447,7 +448,6 @@ void loop()
   static unsigned long loopStart = 0;
   loopStart = millis();
 #endif
-  static uint16_t loopCOunt = 0;
   static uint8_t buttonState;
   static uint8_t oldState = ClickEncoder::Open;
 
@@ -468,6 +468,25 @@ void loop()
   adjustFanSpeed();
   setOutput();
   refreshDisplay();
+  if (state & STATE_ONOFF && settings->loggingType == 0)
+  {
+    static unsigned long lastLogTime = 0;
+    if (lastLogTime + 1000 < millis())
+    {
+      char buffer[10];
+      Serial.print("L;");
+      Serial.print(_rtcTimer.getTotalSeconds());
+      Serial.print(";");
+      Serial.print(readVoltage);
+      Serial.print(";");
+      Serial.print(readCurrent);
+      Serial.print(";");
+      Serial.print(readTemperature);
+      Serial.print(";");
+      Serial.println(totalmAh / 3600000);
+      lastLogTime = millis();
+    }
+  }
 
   //Encoder mgmnt
   int16_t enc = encoder->getValue();
@@ -481,12 +500,14 @@ void loop()
     menu->LongClick();
   oldState = buttonState;
 
-  if (loopCOunt++ >= 10000)
+#if DEBUG_MEMORY
+  static uint16_t loopCount = 0;
+  if (loopCount++ >= 10000)
   {
-    Serial.print("Free:");
-    Serial.println(freeMemory());
-    loopCOunt = 0;
+    debug_printb(F("Free:"), "%i", freeMemory());
+    loopCount = 0;
   }
+#endif
 
 #if DEBUG_TIMINGS
   ellapsedDistribution.Add(millis() - loopStart);

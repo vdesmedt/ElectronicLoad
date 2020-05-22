@@ -1,12 +1,7 @@
 #include <Arduino.h>
 #include <LiquidCrystal_PCF8574.h>
-#define SC_BATT 7
-#define SC_MENU_UP 1
-#define SC_THERMO_L0 2
-#define SC_THERMO_L1 3
-#define SC_THERMO_L2 4
-#define SC_THERMO_L3 5
-#define SC_WATCH 6
+#include "define.h"
+
 void setupSPecialLcdChars(LiquidCrystal_PCF8574 *lcd1)
 {
     byte thermo_l0[]{

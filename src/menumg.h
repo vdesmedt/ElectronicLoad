@@ -8,24 +8,19 @@ MultiDigitValueMenuItem *setValueMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCellCountMenuItem = NULL;
 
-void LoadOff();
-
 extern Settings *settings;
 extern uint8_t lcdRefreshMask;
 extern LiquidCrystal_PCF8574 lcd1;
-
 extern const char *workingModes[];
-const char *onOffChoices[] = {"On ", "Off"};
-const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
+extern const char *onOffChoices[];
 extern const char *battTypes[];
 extern const char *triggerType[];
+extern const char *modeUnits[];
 extern uint8_t state;
 
-const int8_t battMinVoltage[BATT_TYPE_COUNT] = {30, 8, 25, 18};  // 1/10th Volt
-const int8_t battMaxVoltage[BATT_TYPE_COUNT] = {42, 15, 36, 23}; // 1/10th Volt
 bool menu_battCellCountChanged(int32_t newValue)
 {
-    if (newValue > 0 & newValue <= 8)
+    if (newValue > 0 && newValue <= 8)
     {
         settings->battCellCount = newValue;
         settings->version |= 0x01; //Set Dirty

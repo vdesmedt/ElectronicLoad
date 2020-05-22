@@ -6,9 +6,9 @@
 #include <Statistic.h>
 #include <debug.h>
 #include <SPIFlash.h>
+#include "define.h"
 
 #define SETTINGS_VERSION 0x07
-
 struct Settings
 {
     uint8_t version = (SETTINGS_VERSION << 1) + 0;              //LSB to 1 means dirty
@@ -27,7 +27,6 @@ struct Settings
 };
 
 extern Settings *settings;
-
 extern SPIFlash flash;
 
 //Returns true if settings was sucessfully found in flash

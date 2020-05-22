@@ -3,52 +3,18 @@
 #define DEBUG_TIMINGS EDCL_DEBUG && false
 #define DEBUG_MEMORY EDCL_DEBUG && true
 
-#include <Wire.h>
-#include <Arduino.h>
-#include <ClickEncoder.h>
-#include <OneButton.h>
-#include <TimerOne.h>
-#include <LiquidCrystal_PCF8574.h>
-#include <MCP4725.h>
-#include <MCP342x.h>
-#include <Menu.h>
-#include <Filters/SMA.hpp>
-#include <SPIFlash.h>
-#include <MemoryFree.h>
-#include <Settings.h>
-#include <debug.h>
-#include <MCP79410_Timer.h>
 #include "header.h"
-#include <specialLcdChar.h>
-#include "menumg.h"
-#include <Distribution.h>
 
-//BEGIN ADC-DAC
-#if DEBUG_BOARD
-#define DAC_ADDR 0x60
-#define ENC_STEPS 2
-#else
-#define DAC_ADDR 0x61
-#define ENC_STEPS 4
-#endif
-#define ADC_ADDR 0x68
-#define RTC_ADDR 0x6F
-#define IOE_ADDR 0x20
-#define DAC_REF_VOLTAGE 3300
-
-MCP4725 dac(DAC_ADDR);
-MCP342x adc = MCP342x(ADC_ADDR);
-MCP79410_Timer _rtcTimer(RTC_ADDR);
-SPIFlash flash(P_FLASH_SS, 0xEF30);
-LiquidCrystal_PCF8574 lcd1(0x27);
-
-ClickEncoder *encoder;
-OneButton *pushButton;
-
-extern Menu *menu;
+const char *onOffChoices[] = {"On ", "Off"};
+const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
 const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
 const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
 const char *triggerType[TRIGGER_TYPE_COUNT] = {"Man.", "Flip", "Timr"};
+
+const int8_t battMinVoltage[BATT_TYPE_COUNT] = {30, 8, 25, 18};  // 1/10th Volt
+const int8_t battMaxVoltage[BATT_TYPE_COUNT] = {42, 15, 36, 23}; // 1/10th Volt
+
+extern Menu *menu;
 struct Settings *settings = new Settings();
 uint8_t readTemperature = 0; // 1/10 °C
 int16_t readCurrent = 0;     // mA
@@ -59,6 +25,14 @@ uint8_t lcdRefreshMask = 0;
 uint8_t state = 0;
 #define fanLevelState ((state >> 1) & 0x03)
 #define setFanLevel(l) state = (state & ~(0x03 << 1)) | ((l & 0x03) << 1)
+
+MCP4725 dac(DAC_ADDR);
+MCP342x adc = MCP342x(ADC_ADDR);
+MCP79410_Timer _rtcTimer(RTC_ADDR);
+SPIFlash flash(P_FLASH_SS, 0xEF30);
+LiquidCrystal_PCF8574 lcd1(0x27);
+ClickEncoder *encoder;
+OneButton *pushButton;
 
 void timerIsr()
 {

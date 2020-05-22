@@ -16,9 +16,9 @@ const int8_t battMaxVoltage[BATT_TYPE_COUNT] = {42, 15, 36, 23}; // 1/10th Volt
 
 extern Menu *menu;
 struct Settings *settings = new Settings();
-uint8_t readTemperature = 0; // 1/10 °C
-int16_t readCurrent = 0;     // mA
-int16_t readVoltage = 0;     // mV
+uint16_t readTemperature = 0; // 1/10 °C
+int16_t readCurrent = 0;      // mA
+int16_t readVoltage = 0;      // mV
 double totalmAh = 0;
 uint8_t lcdRefreshMask = 0;
 
@@ -112,7 +112,7 @@ void refreshDisplay()
   if (lcdRefreshMask & UM_TEMP)
   {
     lcd1.setCursor(16, 0);
-    lcd1.print(readTemperature);
+    lcd1.print(readTemperature / 10);
     lcd1.setCursor(19, 0);
     lcd1.write(SC_THERMO_L0 + fanLevelState);
     lcdRefreshMask &= ~UM_TEMP;
@@ -270,7 +270,7 @@ void actuateReadings()
   static unsigned long lastTempUpdate = 0;
   if (lastTempUpdate + LCD_TEMP_MAX_UPDATE_RATE < millis())
   {
-    uint8_t newTemperature = temperatureSMA(analogRead(P_LM35)) * 0.32258; // 3.3V / 1023 * 100°C/V * 10
+    uint16_t newTemperature = temperatureSMA(analogRead(P_LM35)) * 3.2258; // 3.3V / 1023 * 100°C/V * 10
     if (newTemperature != readTemperature)
     {
       readTemperature = newTemperature;
@@ -445,10 +445,9 @@ void loop()
   if (state & STATE_ONOFF && settings->loggingType == 0)
   {
     static unsigned long lastLogTime = 0;
-    if (lastLogTime + 1000 < millis())
+    if (lastLogTime + (settings->loggingInterval * 1000) < millis())
     {
       char buffer[10];
-      Serial.print("L;");
       Serial.print(_rtcTimer.getTotalSeconds());
       Serial.print(";");
       Serial.print(readVoltage);

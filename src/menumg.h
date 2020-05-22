@@ -207,6 +207,17 @@ bool menu_cutOffChanged(int32_t newValue)
     return false;
 }
 
+bool menu_loggingIntervalChanged(int32_t newValue)
+{
+    if (newValue > 1 & newValue < 3600)
+    {
+        settings->loggingInterval = newValue;
+        settings->version |= 0x01;
+        return true;
+    }
+    return false;
+}
+
 void setupMenu()
 {
     MultiDigitValueMenuItem *vmi;
@@ -233,6 +244,9 @@ void setupMenu()
     cmi = menu->AddMultiChoice(onOffChoices, 2, 0, y++, menu_LoggingChanged, true);
     cmi->SetPrefix(F("Logging     :"));
     cmi->currentChoiceIndex = settings->loggingType;
+
+    vmi = menu->AddValue(settings->loggingInterval, 5, 0, 0, y++, menu_loggingIntervalChanged);
+    vmi->SetPrefix(F("Log. Interv.:"));
 
     cmi = menu->AddMultiChoice(triggerType, TRIGGER_TYPE_COUNT, 0, y++, menu_triggerTypeChanged, true);
     cmi->SetPrefix(F("Trigger Type:"));

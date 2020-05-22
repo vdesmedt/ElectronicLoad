@@ -449,13 +449,13 @@ void loop()
     {
       char buffer[10];
       Serial.print(_rtcTimer.getTotalSeconds());
-      Serial.print(";");
+      Serial.print(",");
       Serial.print(readVoltage);
-      Serial.print(";");
+      Serial.print(",");
       Serial.print(readCurrent);
-      Serial.print(";");
+      Serial.print(",");
       Serial.print(readTemperature);
-      Serial.print(";");
+      Serial.print(",");
       Serial.println(totalmAh / 3600000);
       lastLogTime = millis();
     }

@@ -209,7 +209,7 @@ bool menu_cutOffChanged(int32_t newValue)
 
 bool menu_loggingIntervalChanged(int32_t newValue)
 {
-    if (newValue > 1 & newValue < 3600)
+    if (newValue >= 1 & newValue <= 3600)
     {
         settings->loggingInterval = newValue;
         settings->version |= 0x01;

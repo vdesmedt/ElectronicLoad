@@ -20,6 +20,12 @@
 #define P_TRIGGER A3
 //END PIN Confit
 
+#define LOGGIN_MODE_COUNT 4
+#define LOG_OFF 0
+#define LOG_SERIAL 1
+#define LOG_PACKET_SERIAL 2
+#define LOG_RFM69 3
+
 #define WORKINGMODE_COUNT 4
 #define MODE_CC 0
 #define MODE_CR 1

@@ -1,5 +1,5 @@
 #define DEBUG_BOARD false
-#define EDCL_DEBUG false
+#define EDCL_DEBUG true
 #define DEBUG_TIMINGS EDCL_DEBUG && false
 #define DEBUG_MEMORY EDCL_DEBUG && true
 
@@ -10,17 +10,19 @@ const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
 const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
 const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
 const char *triggerType[TRIGGER_TYPE_COUNT] = {"Man.", "Flip", "Timr"};
+const char *loggingMode[LOGGIN_MODE_COUNT] = {"Off  ", "St Ser ", "Bi Ser", "RFM69"};
 
 const int8_t battMinVoltage[BATT_TYPE_COUNT] = {30, 8, 25, 18};  // 1/10th Volt
 const int8_t battMaxVoltage[BATT_TYPE_COUNT] = {42, 15, 36, 23}; // 1/10th Volt
 
-extern Menu *menu;
+Menu *menu;
 struct Settings *settings = new Settings();
 uint16_t readTemperature = 0; // 1/10 °C
 int16_t readCurrent = 0;      // mA
 int16_t readVoltage = 0;      // mV
 double totalmAh = 0;
 uint8_t lcdRefreshMask = 0;
+PacketSerial pSerial;
 
 uint8_t state = 0;
 #define fanLevelState ((state >> 1) & 0x03)
@@ -357,9 +359,32 @@ void adjustFanSpeed()
   analogWrite(P_FAN, fanLevelPwm[fanLevelState]);
 }
 
+void LogData()
+{
+  char buffer[10];
+  switch (settings->loggingType)
+  {
+  case LOG_SERIAL:
+    Serial.print(_rtcTimer.getTotalSeconds());
+    Serial.print(",");
+    Serial.print(readVoltage);
+    Serial.print(",");
+    Serial.print(readCurrent);
+    Serial.print(",");
+    Serial.print(readTemperature);
+    Serial.print(",");
+    Serial.println(totalmAh / 3600000);
+    break;
+  case LOG_PACKET_SERIAL:
+    break;
+  case LOG_RFM69:
+    break;
+  }
+}
+
 void setup()
 {
-  Serial.begin(9600);
+  pSerial.begin(9600);
   // initialize the lcd
   lcd1.begin(20, 4);
   lcd1.setBacklight(255);
@@ -442,36 +467,27 @@ void loop()
   adjustFanSpeed();
   setOutput();
   refreshDisplay();
-  if (state & STATE_ONOFF && settings->loggingType == 0)
+  static unsigned long lastLogTime = 0;
+  if (state & STATE_ONOFF && settings->loggingType != 0 && lastLogTime + (settings->loggingInterval * 1000) < millis())
   {
-    static unsigned long lastLogTime = 0;
-    if (lastLogTime + (settings->loggingInterval * 1000) < millis())
-    {
-      char buffer[10];
-      Serial.print(_rtcTimer.getTotalSeconds());
-      Serial.print(",");
-      Serial.print(readVoltage);
-      Serial.print(",");
-      Serial.print(readCurrent);
-      Serial.print(",");
-      Serial.print(readTemperature);
-      Serial.print(",");
-      Serial.println(totalmAh / 3600000);
-      lastLogTime = millis();
-    }
+    LogData();
+    lastLogTime = millis();
   }
 
-  //Encoder mgmnt
+  //Encoder
   int16_t enc = encoder->getValue();
   if (enc != 0)
     menu->EncoderInc(enc);
 
+  //Encoder Button
   buttonState = encoder->getButton();
   if (buttonState == ClickEncoder::Clicked)
     menu->Click();
   else if (buttonState == ClickEncoder::Held && oldState != ClickEncoder::Held)
     menu->LongClick();
   oldState = buttonState;
+
+  pSerial.update();
 
 #if DEBUG_MEMORY
   static uint16_t loopCount = 0;

@@ -3,7 +3,7 @@
 #include "header.h"
 #include <Menu.h>
 
-Menu *menu;
+extern Menu *menu;
 MultiDigitValueMenuItem *setValueMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCellCountMenuItem = NULL;
@@ -16,6 +16,7 @@ extern const char *onOffChoices[];
 extern const char *battTypes[];
 extern const char *triggerType[];
 extern const char *modeUnits[];
+extern const char *loggingMode[];
 extern uint8_t state;
 
 bool menu_battCellCountChanged(int32_t newValue)
@@ -241,7 +242,7 @@ void setupMenu()
     menu->AddPage();
     menu->AddGoToPage(0, "[\x01Main]", 0, y++);
 
-    cmi = menu->AddMultiChoice(onOffChoices, 2, 0, y++, menu_LoggingChanged, true);
+    cmi = menu->AddMultiChoice(loggingMode, LOGGIN_MODE_COUNT, 0, y++, menu_LoggingChanged, true);
     cmi->SetPrefix(F("Logging     :"));
     cmi->currentChoiceIndex = settings->loggingType;
 

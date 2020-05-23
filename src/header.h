@@ -9,6 +9,7 @@
 #include <LiquidCrystal_PCF8574.h>
 #include <MCP4725.h>
 #include <MCP342x.h>
+#include <PacketSerial.h>
 #include <Menu.h>
 #include <Filters/SMA.hpp>
 #include <SPIFlash.h>

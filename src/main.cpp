@@ -1,5 +1,5 @@
 #define DEBUG_BOARD false
-#define EDCL_DEBUG true
+#define EDCL_DEBUG false
 #define DEBUG_TIMINGS EDCL_DEBUG && false
 #define DEBUG_MEMORY EDCL_DEBUG && true
 
@@ -22,6 +22,7 @@ int16_t readCurrent = 0;      // mA
 int16_t readVoltage = 0;      // mV
 double totalmAh = 0;
 uint8_t lcdRefreshMask = 0;
+unsigned long iddleSince = 0;
 
 uint8_t state = 0;
 #define fanLevelState ((state >> 1) & 0x03)
@@ -204,15 +205,16 @@ void refreshDisplay()
 
 void loadButton_click()
 {
+  iddleSince = millis();
   if (state & STATE_ONOFF)
     LoadOff();
   else
     LoadOn();
-  SaveSettings();
 }
 
 void loadButton_longClick()
 {
+  iddleSince = millis();
   if (!(state & STATE_ONOFF))
   {
     _rtcTimer.reset();
@@ -471,7 +473,7 @@ void setup()
 
   setupMenu();
   menu_modeChanged(settings->mode);
-
+  settings->version &= ~1; //Reset dirty flag modified by menu_modeChanged
   lcdRefreshMask = 0xFF;
 }
 
@@ -512,15 +514,27 @@ void loop()
   //Encoder
   int16_t enc = encoder->getValue();
   if (enc != 0)
+  {
+    iddleSince = millis();
     menu->EncoderInc(enc);
+  }
 
   //Encoder Button
   buttonState = encoder->getButton();
   if (buttonState == ClickEncoder::Clicked)
+  {
+    iddleSince = millis();
     menu->Click();
+  }
   else if (buttonState == ClickEncoder::Held && oldState != ClickEncoder::Held)
+  {
+    iddleSince = millis();
     menu->LongClick();
+  }
   oldState = buttonState;
+
+  if (!(state & STATE_ONOFF) && settings->version & 0x01 && iddleSince + 5000 < millis())
+    SaveSettings();
 
 #if DEBUG_MEMORY
   static uint16_t loopCount = 0;
@@ -533,7 +547,7 @@ void loop()
 
 #if DEBUG_TIMINGS
   ellapsedDistribution.Add(millis() - loopStart);
-  if (ellapsedDistribution.samples >= 5000)
+  if (ellapsedDistribution.samples >= 10000)
   {
     Serial.print("Loop Tm Distri :");
     ellapsedDistribution.Print();

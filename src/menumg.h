@@ -57,6 +57,7 @@ bool menu_triggerTypeChanged(int8_t newChoice)
 
 bool menu_modeChanged(int8_t newMode)
 {
+    LoadOff();
     settings->mode = newMode;
     setValueMenuItem->SetValue(settings->setValues[settings->mode]);
     setValueMenuItem->SetSuffix(modeUnits[newMode]);
@@ -88,7 +89,6 @@ bool menu_modeChanged(int8_t newMode)
     }
 
     menu->PrintItem(setValueMenuItem);
-    LoadOff();
     settings->version |= 0x01; //Set Dirty
     return true;
 }
@@ -123,7 +123,6 @@ void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
         lcd1.setCursor(0, 3);
         lcd1.write(SC_WATCH);
         lcdRefreshMask = 0xFF;
-        SaveSettings();
         break;
     }
 }

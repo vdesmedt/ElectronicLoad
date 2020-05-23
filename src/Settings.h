@@ -11,7 +11,7 @@
 #define SETTINGS_VERSION 0x08
 struct Settings
 {
-    uint8_t version = (SETTINGS_VERSION << 1) + 0;              //LSB to 1 means dirty
+    uint8_t version = (SETTINGS_VERSION << 1);                  //LSB to 1 means dirty
     uint8_t mode = 0;                                           //CC
     uint16_t setValues[WORKINGMODE_COUNT] = {0, 1000, 50, 100}; //0mA 100Ω, 5W, 100mA
     uint8_t backlight = 0;                                      //On
@@ -46,22 +46,19 @@ bool ReadSettings()
 
 void SaveSettings()
 {
-    if (settings->version & 0x01)
-    {
 #if EDCL_DEBUG
-        unsigned long s = micros();
+    unsigned long s = micros();
 #endif
-        flash.blockErase4K(FLASH_ADR);
-        while (flash.busy())
-            ;
-        settings->version &= ~1; //Set Dirty flag to zero
-        flash.writeBytes(FLASH_ADR, settings, sizeof(Settings));
-        while (flash.busy())
-            ;
+    flash.blockErase4K(FLASH_ADR);
+    while (flash.busy())
+        ;
+    settings->version &= ~1; //Set Dirty flag to zero
+    flash.writeBytes(FLASH_ADR, settings, sizeof(Settings));
+    while (flash.busy())
+        ;
 #if EDCL_DEBUG
-        debug_printb(F("Flash Stats took:"), "%luµs\n", micros() - s);
+    debug_printb(F("Flashing settings:"), "%luµs\n", micros() - s);
 #endif
-    }
 }
 
 #endif

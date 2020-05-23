@@ -15,7 +15,7 @@ struct Settings
     uint8_t mode = 0;                                           //CC
     uint16_t setValues[WORKINGMODE_COUNT] = {0, 1000, 50, 100}; //0mA 100Ω, 5W, 100mA
     uint8_t backlight = 0;                                      //On
-    uint16_t r17Value = 1000;                                   //100mΩ
+    uint16_t r17Value = 1000;                                   //1/10th mΩ
     uint8_t battType = 0;                                       //Lipo
     uint8_t battCellCount = 1;                                  //Cell Count
     uint16_t battCutOff[2] = {3200, 1000};                      //3.2V 1.0V

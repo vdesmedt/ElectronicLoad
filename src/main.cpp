@@ -9,7 +9,7 @@ const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
 const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
 const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
-const char *triggerType[TRIGGER_TYPE_COUNT] = {"Man.", "Flip", "Timr"};
+const char *triggerType[TRIGGER_TYPE_COUNT] = {"Off ", "Flip", "Timr"};
 const char *loggingMode[LOGGIN_MODE_COUNT] = {"Off  ", "St Ser ", "Bi Ser", "RFM69"};
 
 const int8_t battMinVoltage[BATT_TYPE_COUNT] = {30, 8, 25, 18};  // 1/10th Volt
@@ -22,7 +22,6 @@ int16_t readCurrent = 0;      // mA
 int16_t readVoltage = 0;      // mV
 double totalmAh = 0;
 uint8_t lcdRefreshMask = 0;
-PacketSerial pSerial;
 
 uint8_t state = 0;
 #define fanLevelState ((state >> 1) & 0x03)
@@ -59,11 +58,45 @@ void LoadOff()
   _rtcTimer.stop();
 }
 
+bool getTriggerState()
+{
+  if (settings->triggerType == TRIGGER_OFF)
+    return true;
+
+  static int oldTriggerState = HIGH;
+  static unsigned long lastTriggerTimeMs = 0;
+  static bool flipState = false;
+  int triggerState = digitalRead(P_TRIGGER);
+  if (triggerState != oldTriggerState && triggerState == LOW)
+  {
+    debug_print(F("Trigger detected\n"));
+    switch (settings->triggerType)
+    {
+    case TRIGGER_FLIP:
+      flipState = !flipState;
+      break;
+    case TRIGGER_TIMER:
+      lastTriggerTimeMs = millis();
+      break;
+    }
+  }
+  oldTriggerState = triggerState;
+  switch (settings->triggerType)
+  {
+  case TRIGGER_FLIP:
+    return flipState;
+  case TRIGGER_TIMER:
+    return lastTriggerTimeMs + settings->triggerTimer > millis();
+  }
+
+  return false;
+}
+
 void setOutput()
 {
-  if (state & STATE_ONOFF)
+  if ((state & STATE_ONOFF) && getTriggerState())
   {
-    double newDacValue = 0; //Output in mV
+    double newDacValue = 0; //Output in mV -> mA
     double set = settings->setValues[settings->mode];
     switch (settings->mode)
     {
@@ -80,8 +113,8 @@ void setOutput()
     }
 
     //Adjust for R17 Value
-    newDacValue = newDacValue * (double)settings->r17Value / 1000.0;
-    debug_printb(F("New DAC Value:"), "%d\n", (int)round(newDacValue));
+    newDacValue *= (double)settings->r17Value / 1000.0;
+    //debug_printb(F("New DAC Value:"), "%d\n", (int)round(newDacValue));
     dac.setValue(round(newDacValue));
   }
   else
@@ -302,7 +335,8 @@ void actuateReadings()
     {
       if (adcValue < 0)
         adcValue = 0;
-      newVoltage = adcValue * (2048.0 / 32768) * 50;
+      //newVoltage = adcValue * (2048.0 / 32768.0) * 50;
+      newVoltage = (float)adcValue * 3.125;
       if (newVoltage != readVoltage || lastVoltageUpdate + 500 < millis())
       {
         readVoltage = newVoltage;
@@ -320,7 +354,8 @@ void actuateReadings()
     {
       if (adcValue < 0)
         adcValue = 0;
-      newCurrent = adcValue * (2048.0 / 32768) * 2.5 * (1000.0 / settings->r17Value);
+      //newCurrent = adcValue * (2048.0 / 32768.0) * 2.5 * (1000.0 / (float)settings->r17Value);
+      newCurrent = (float)adcValue * 156.25 / (float)settings->r17Value;
       if (newCurrent != readCurrent || lastCurrentUpdate + 500 < millis())
       {
         if (state & STATE_ONOFF)
@@ -384,7 +419,7 @@ void LogData()
 
 void setup()
 {
-  pSerial.begin(9600);
+  Serial.begin(9600);
   // initialize the lcd
   lcd1.begin(20, 4);
   lcd1.setBacklight(255);
@@ -487,13 +522,11 @@ void loop()
     menu->LongClick();
   oldState = buttonState;
 
-  pSerial.update();
-
 #if DEBUG_MEMORY
   static uint16_t loopCount = 0;
   if (loopCount++ >= 10000)
   {
-    debug_printb(F("Free:"), "%i", freeMemory());
+    debug_printb(F("Free:"), "%i\n", freeMemory());
     loopCount = 0;
   }
 #endif

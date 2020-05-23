@@ -47,7 +47,11 @@
 #define STATE_SUSPICIOUS_CELL_COUNT (1 << 3)
 
 #define BATT_TYPE_COUNT 4
+
 #define TRIGGER_TYPE_COUNT 3
+#define TRIGGER_OFF 0
+#define TRIGGER_FLIP 1
+#define TRIGGER_TIMER 2
 
 #if DEBUG_BOARD
 #define DAC_ADDR 0x60

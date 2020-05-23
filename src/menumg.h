@@ -39,11 +39,19 @@ bool menu_LoggingChanged(int8_t newValue)
 
 bool menu_triggerTimeChanged(int32_t newValue)
 {
-    return true;
+    if (newValue >= 10 && newValue <= 60000)
+    {
+        settings->triggerTimer = newValue;
+        settings->version |= 0x01; //Set Dirty
+        return true;
+    }
+    return false;
 }
 
-bool menu_triggerTypeChanged(int8_t newTriggerType)
+bool menu_triggerTypeChanged(int8_t newChoice)
 {
+    settings->triggerType = newChoice;
+    settings->version |= 0x01; //Set Dirty
     return true;
 }
 

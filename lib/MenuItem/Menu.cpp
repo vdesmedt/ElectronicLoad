@@ -60,10 +60,18 @@ void Menu::EncoderInc(int8_t steps)
     {
         //! This assumes menu items are sorted along Y axis in the array
         _currentItem += steps;
+        //First check we are not out of page's boundaries
         if (_currentItem < _pageFirstIndexes[_currentPage])
             _currentItem = _pageFirstIndexes[_currentPage];
         else if (_currentItem >= _pageFirstIndexes[_currentPage + 1])
             _currentItem = _pageFirstIndexes[_currentPage + 1] - 1;
+
+        //Then make sure its pointing to a visible menu item
+        if (!_menuItems[_currentItem]->IsShown())
+        {
+            EncoderInc(steps / abs(steps));
+            return;
+        }
 
         uint8_t nsl = _scrollLevel;
         if (steps > 0 && _menuItems[_currentItem]->getCy() - _scrollLevel > 3)

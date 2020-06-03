@@ -13,6 +13,7 @@
 #include <Menu.h>
 #include <Filters/SMA.hpp>
 #include <SPIFlash.h>
+#include <Adafruit_MCP23008.h>
 #include <MemoryFree.h>
 #include <Settings.h>
 #include <debug.h>

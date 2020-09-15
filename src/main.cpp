@@ -1,5 +1,5 @@
 #define DEBUG_BOARD false
-#define EDCL_DEBUG false
+#define EDCL_DEBUG true
 #define DEBUG_TIMINGS EDCL_DEBUG && false
 #define DEBUG_MEMORY EDCL_DEBUG && true
 
@@ -32,7 +32,7 @@ MCP4725 dac(DAC_ADDR);
 MCP342x adc = MCP342x(ADC_ADDR);
 MCP79410_Timer _rtcTimer(RTC_ADDR);
 SPIFlash flash(P_FLASH_SS, 0xEF30);
-LiquidCrystal_PCF8574 lcd1(0x27);
+U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI mainLcd(U8G2_R0, /* cs=*/3, /* dc=*/1, /* reset=*/0);
 ClickEncoder *encoder;
 OneButton *pushButton;
 
@@ -44,7 +44,7 @@ void timerIsr()
 void LoadOn()
 {
   state |= STATE_ONOFF;
-  digitalWrite(P_LOADON_LED, HIGH);
+  digitalWrite(P_LOADON_LED, LOW);
   lcdRefreshMask |= UM_LOAD_ONOFF;
   setOutput();
   _rtcTimer.start();
@@ -53,7 +53,7 @@ void LoadOn()
 void LoadOff()
 {
   state &= ~STATE_ONOFF;
-  digitalWrite(P_LOADON_LED, LOW);
+  digitalWrite(P_LOADON_LED, HIGH);
   lcdRefreshMask |= UM_LOAD_ONOFF;
   setOutput();
   _rtcTimer.stop();
@@ -115,7 +115,7 @@ void setOutput()
 
     //Adjust for R17 Value
     newDacValue *= (double)settings->r17Value / 1000.0;
-    //debug_printb(F("New DAC Value:"), "%d\n", (int)round(newDacValue));
+    debug_printb(F("New DAC Value:"), "%d\n", (int)round(newDacValue));
     dac.setValue(round(newDacValue));
   }
   else
@@ -124,83 +124,55 @@ void setOutput()
   }
 }
 
-void SetBacklight()
-{
-  lcd1.setBacklight(settings->backlight == 0 ? 255 : 0);
-}
+#include <MMDigit12.h>
+#include <MMDigit08.h>
 
 void refreshDisplay()
 {
-  lcdRefreshMask &= (UM_TEMP | UM_VOLTAGE | UM_CURRENT | UM_TIME | UM_LOAD_ONOFF | UM_ALERT);
-  if (lcdRefreshMask == 0 || menu->GetCurrentPage() != 0)
+  static unsigned long lastRefresh = millis();
+  if ((lcdRefreshMask | UM_ALL) == 0 && millis() < lastRefresh + 500)
     return;
   static char buffer[10];
-
-  //Load On Off
-  if (lcdRefreshMask & UM_LOAD_ONOFF)
+  mainLcd.clearBuffer();
+  if (menu->GetCurrentPage() == 0)
   {
-    lcd1.setCursor(0, 0);
-    lcd1.print(state & STATE_ONOFF ? F("On :") : F("Off:"));
-    lcdRefreshMask &= ~UM_LOAD_ONOFF;
-  }
+    mainLcd.setFont(MMDigit12);
+    //Voltage
+    mainLcd.drawStr(0, 30, dtostrf((double)readVoltage / 1000, 6, 3, buffer));
+    if (readVoltage / 1000 < 10)
+      mainLcd.drawStr(0, 30, "0");
+    //Current
+    mainLcd.drawStr(0, 45, dtostrf((double)readCurrent / 1000, 6, 3, buffer));
 
-  //Temp
-  if (lcdRefreshMask & UM_TEMP)
-  {
-    lcd1.setCursor(16, 0);
-    lcd1.print(readTemperature / 10);
-    lcd1.setCursor(19, 0);
-    lcd1.write(SC_THERMO_L0 + fanLevelState);
-    lcdRefreshMask &= ~UM_TEMP;
-  }
-
-  //Readings
-  if (lcdRefreshMask & (UM_CURRENT | UM_VOLTAGE))
-  {
-    if (lcdRefreshMask & UM_CURRENT)
-    {
-      lcd1.setCursor(0, 1);
-      lcd1.print(dtostrf((double)readCurrent / 1000, 5, 3, buffer));
-      lcdRefreshMask &= ~UM_CURRENT;
-    }
-    if (lcdRefreshMask & UM_VOLTAGE)
-    {
-      lcd1.setCursor(7, 1);
-      lcd1.print(dtostrf((double)readVoltage / 1000, 6, 3, buffer));
-      lcdRefreshMask &= ~UM_VOLTAGE;
-    }
-    lcd1.setCursor(15, 1);
-    lcd1.print(dtostrf((double)readVoltage * readCurrent / 1000000, 4, 1, buffer));
-  }
-
-  //Time
-  static unsigned long lastTotalSec = 0;
-  static unsigned long lastTmUpdate = 0;
-  if ((lcdRefreshMask & UM_TIME) || (lastTmUpdate + 200 < millis() && lastTotalSec != _rtcTimer.getTotalSeconds()))
-  {
-    lcd1.setCursor(1, 3);
+    mainLcd.setFont(MMDigit08);
+    //Temp
+    snprintf(buffer, 10, "%d", readTemperature / 10);
+    mainLcd.drawStr(104, 26, buffer);
+    //Power
+    mainLcd.drawStr(107, 36, dtostrf((double)readVoltage * readCurrent / 1000000, -4, 1, buffer));
+    //Time & mAh
     _rtcTimer.getTime(buffer);
-    lcd1.print(buffer);
+    mainLcd.drawStr(89, 46, buffer);
 
-    lastTotalSec = _rtcTimer.getTotalSeconds();
-    lastTmUpdate = millis();
-
-    lcd1.setCursor(10, 3);
     dtostrf(totalmAh / 3600000, 7, 1, buffer);
-    lcd1.print(buffer);
+    mainLcd.drawStr(59, 57, buffer);
 
-    lcdRefreshMask &= ~UM_TIME;
+    mainLcd.setFont(u8g2_font_6x10_tf);
+    //OnOff
+    mainLcd.setFont(u8g2_font_6x10_tf);
+    mainLcd.drawStr(0, 13, state & STATE_ONOFF ? "On" : "Off");
+
+    //Units
+    mainLcd.drawStr(40, 28, "V");
+    mainLcd.drawStr(40, 44, "A");
+    mainLcd.drawStr(123, 35, "W");
+    mainLcd.drawStr(117, 25, "\xb0\x43"); //°C
+    mainLcd.drawStr(111, 56, "mAh");
   }
 
-  if (lcdRefreshMask & UM_ALERT)
-  {
-    lcd1.setCursor(9, 0);
-    lcd1.print(state & STATE_SUSPICIOUS_CELL_COUNT ? "!" : " ");
-    lcdRefreshMask &= ~UM_ALERT;
-  }
-
-  //Cursor
-  menu->PrintCursor();
+  menu->Print();
+  mainLcd.sendBuffer();
+  lcdRefreshMask = UM_NONE;
 }
 
 void loadButton_click()
@@ -224,11 +196,10 @@ void loadButton_longClick()
 
 void selfTest()
 {
+  mainLcd.clearBuffer();
   uint8_t selfTestResult = 0;
-  lcd1.home();
-  lcd1.print(F("= Electronic  Load ="));
-  lcd1.setCursor(0, 1);
-  lcd1.print(F("ADC DAC RTC IOE FLH"));
+  mainLcd.drawStr(10, 8, "= Electronic  Load =");
+  mainLcd.drawStr(0, 20, "ADC DAC RTC IOE FLH");
 
   //Check ADC Presence
   Wire.requestFrom(ADC_ADDR, 1);
@@ -246,7 +217,7 @@ void selfTest()
   Wire.beginTransmission(RTC_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
-  Wire.requestFrom(RTC_ADDR, (uint8_t)1);
+  Wire.requestFrom(RTC_ADDR, 1);
   if (!Wire.available())
     selfTestResult |= 0x04;
 
@@ -254,7 +225,7 @@ void selfTest()
   Wire.beginTransmission(IOE_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
-  Wire.requestFrom(IOE_ADDR, (uint8_t)1);
+  Wire.requestFrom(IOE_ADDR, 1);
   if (!Wire.available())
     selfTestResult |= 0x08;
 
@@ -265,9 +236,10 @@ void selfTest()
   //Result ?
   for (uint8_t i = 0; i < 5; i++)
   {
-    lcd1.setCursor(4 * i + 1, 2);
-    lcd1.print(selfTestResult & (1 << i) ? "X" : "V");
+    mainLcd.drawStr(0 + 10 * i, 30, selfTestResult & (1 << i) ? "X" : "V");
   }
+  mainLcd.sendBuffer();
+
   delay(selfTestResult > 0 ? 2000 : 500);
 
   //Booting
@@ -307,7 +279,8 @@ void actuateReadings()
   static unsigned long lastTempUpdate = 0;
   if (lastTempUpdate + LCD_TEMP_MAX_UPDATE_RATE < millis())
   {
-    uint16_t newTemperature = temperatureSMA(analogRead(P_LM35)) * 3.2258; // 3.3V / 1023 * 100°C/V * 10
+
+    uint16_t newTemperature = temperatureSMA(analogRead(P_LM35)) * 3.376; //1023/3.3 Step/V, 100°C/V
     if (newTemperature != readTemperature)
     {
       readTemperature = newTemperature;
@@ -398,7 +371,6 @@ void adjustFanSpeed()
 
 void LogData()
 {
-  char buffer[10];
   switch (settings->loggingType)
   {
   case LOG_SERIAL:
@@ -423,9 +395,8 @@ void setup()
 {
   Serial.begin(9600);
   // initialize the lcd
-  lcd1.begin(20, 4);
-  lcd1.setBacklight(255);
-  setupSPecialLcdChars(&lcd1);
+  mainLcd.begin();
+  mainLcd.clearBuffer();
 
   pinMode(P_LM35, INPUT);
   pinMode(P_FAN, OUTPUT);
@@ -467,14 +438,13 @@ void setup()
     while (!dac.RDY())
       ;
   }
-  SetBacklight();
 
   Wire.setClock(400000); //Done after dac.Begin as it itself setClock to 100.000
 
   setupMenu();
   menu_modeChanged(settings->mode);
   settings->version &= ~1; //Reset dirty flag modified by menu_modeChanged
-  lcdRefreshMask = 0xFF;
+  lcdRefreshMask = UM_ALL;
 }
 
 void loop()

@@ -1,4 +1,5 @@
 #include <Menu.h>
+#include <avr/pgmspace.h>
 
 //TODO Remove necessity to specify item/page count by inspecting AddPage/AddMenuItem
 Menu::Menu(uint8_t pageCount, uint8_t itemCount)
@@ -32,7 +33,7 @@ void Menu::AddPage()
     this->_pageFirstIndexes[_currentPage] = this->_currentItem;
     this->_currentPage++;
 }
-void Menu::Configure(LiquidCrystal_PCF8574 *lcd, void (*onPageChange)(uint8_t, uint8_t))
+void Menu::Configure(U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI *lcd, void (*onPageChange)(uint8_t, uint8_t))
 {
     this->_onPageChange = onPageChange;
     this->_pageFirstIndexes[_currentPage] = _currentItem;
@@ -73,19 +74,12 @@ void Menu::EncoderInc(int8_t steps)
             return;
         }
 
-        uint8_t nsl = _scrollLevel;
-        if (steps > 0 && _menuItems[_currentItem]->getCy() - _scrollLevel > 3)
-            nsl = _scrollLevel + 1;
-        else if (_menuItems[_currentItem]->getCy() - _scrollLevel < 0)
-            nsl = _scrollLevel - 1;
-
-        if (nsl != _scrollLevel)
-        {
-            _scrollLevel = nsl;
-            _lcd->clear();
-            this->Print();
-        }
-        this->PrintCursor();
+        //Scroll down
+        if (steps > 0 && _menuItems[_currentItem]->getCy() - _scrollLevel > _lcd->getHeight())
+            _scrollLevel = _menuItems[_currentItem]->getCy() - _lcd->getHeight();
+        //Scroll Up
+        if (steps < 0 && _menuItems[_currentItem]->getCy() < _scrollLevel + _lcd->getMaxCharHeight())
+            _scrollLevel = _menuItems[_currentItem]->getCy() - _lcd->getMaxCharHeight();
     }
 }
 void Menu::Click()
@@ -122,7 +116,7 @@ void Menu::Print()
     for (int i = this->_pageFirstIndexes[this->_currentPage]; i < this->_pageFirstIndexes[this->_currentPage + 1]; i++)
     {
         mi = _menuItems[i];
-        if (mi->getCy() >= _scrollLevel && mi->getCy() - _scrollLevel < 4)
+        if (mi->getCy() >= _scrollLevel && mi->getCy() - _scrollLevel <= _lcd->getHeight())
             this->PrintItem(this->_menuItems[i]);
     }
     this->PrintCursor();
@@ -134,23 +128,23 @@ void Menu::PrintItem(MenuItem *mi)
     {
         _lcd->setCursor(mi->getCx(), mi->getCy() - _scrollLevel);
         _lcd->print(mi->GetPrefix());
-        _lcd->print(mi->GetLabel());
+        if (mi == _menuItems[_currentItem])
+        {
+            char buffer[20];
+            strcpy_P(buffer, (char *)mi->GetPrefix());
+            _lcd->drawBox(mi->getCx() + _lcd->getStrWidth(buffer) - 1, mi->getCy() - _lcd->getMaxCharHeight() + 1 - _scrollLevel, _lcd->getStrWidth(mi->GetLabel()) + 2, _lcd->getMaxCharHeight());
+            _lcd->setColorIndex(0);
+            _lcd->print(mi->GetLabel());
+            _lcd->setColorIndex(1);
+        }
+        else
+        {
+            _lcd->print(mi->GetLabel());
+        }
         _lcd->print(mi->GetSufix());
     }
 }
 
 void Menu::PrintCursor()
 {
-    MenuItem *mi = this->_menuItems[this->_currentItem];
-    _lcd->setCursor(mi->getCx() + mi->GetCursorOffset(_selected), mi->getCy() - _scrollLevel);
-    if (mi->GetCursorType(_selected) == MenuItem::cursorType::Normal)
-    {
-        _lcd->noBlink();
-        _lcd->cursor();
-    }
-    else
-    {
-        _lcd->noCursor();
-        _lcd->blink();
-    }
 }

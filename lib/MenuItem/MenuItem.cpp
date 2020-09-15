@@ -2,7 +2,8 @@
 
 MenuItem::MenuItem(uint8_t cursorX, uint8_t cursorY)
 {
-    cursor = 20 * cursorY + cursorX;
+    _cursorX = cursorX;
+    _cursorY = cursorY;
 }
 
 size_t getLength(const __FlashStringHelper *ifsh)

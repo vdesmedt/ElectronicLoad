@@ -10,6 +10,10 @@
     {
       "name": "ATTinyTest",
       "path": "/Users/vdesmedt/Documents/PlatformIO/Projects/ATTinyTest"
+    },
+    {
+      "name": "ArduinoMenuTest",
+      "path": "../ArduinoMenuTest"
     }
   ],
   "settings": {

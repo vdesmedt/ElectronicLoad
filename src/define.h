@@ -8,15 +8,17 @@
 #define P_LM35 A6
 #define P_FAN 6
 #else
-#define P_ENC1 4
-#define P_ENC2 3
-#define P_ENCBTN 7
-#define P_LOADON_BTN 6
-#define P_LOADON_LED 9
+#define P_ENC1 21
+#define P_ENC2 22
+#define P_ENCBTN 20
+#define P_LOADON_BTN 19
+#define P_LOADON_LED 15
 #define P_LM35 A6
 #define P_FAN 5
+#define P_FAN_ONOFF A1
+#define P_FAN_PWM 12
 #endif
-#define P_FLASH_SS 8
+#define P_FLASH_SS 23
 #define P_TRIGGER A3
 //END PIN Confit
 
@@ -42,6 +44,9 @@
 #define UM_LOAD_ONOFF (1 << 3)
 #define UM_TIME (1 << 4)
 #define UM_ALERT (1 << 5)
+#define UM_MENU (1 << 6)
+#define UM_ALL B01111111
+#define UM_NONE 0
 
 #define STATE_ONOFF 1
 #define STATE_SUSPICIOUS_CELL_COUNT (1 << 3)

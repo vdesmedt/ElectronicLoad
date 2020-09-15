@@ -2,11 +2,11 @@
 #define _HEADER_H_
 
 #include <Wire.h>
+#include <SPI.h>
 #include <Arduino.h>
 #include <ClickEncoder.h>
 #include <OneButton.h>
 #include <TimerOne.h>
-#include <LiquidCrystal_PCF8574.h>
 #include <MCP4725.h>
 #include <MCP342x.h>
 #include <PacketSerial.h>
@@ -19,6 +19,7 @@
 #include <debug.h>
 #include <MCP79410_Timer.h>
 #include <Distribution.h>
+#include <U8g2lib.h>
 
 void timerIsr();
 void setupMenu();

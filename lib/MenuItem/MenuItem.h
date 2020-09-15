@@ -34,19 +34,21 @@ public:
     virtual void Show();
     virtual bool IsShown();
 
-    uint8_t getCx() { return cursor % 20; }
-    uint8_t getCy() { return cursor / 20; }
-    void setCx(uint8_t x) { cursor = cursor / 20 + x; }
-    void setCy(uint8_t y) { cursor = cursor % 20 + 20 * y; }
+    uint8_t getCx() { return _cursorX; }
+    uint8_t getCy() { return _cursorY; }
+    void setCx(uint8_t x) { _cursorX = x; }
+    void setCy(uint8_t y) { _cursorY = y; }
 
 protected:
     const __FlashStringHelper *_prefix = NULL;
     uint8_t _prefixLenth;
     const char *_suffix = NULL;
     uint8_t _state = IS_SHOW;
+    uint8_t* _labelFont = NULL;
 
 private:
-    uint8_t cursor = 0;
+    uint8_t _cursorX = 0;
+    uint8_t _cursorY = 0;
 };
 
 #endif

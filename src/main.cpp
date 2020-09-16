@@ -95,6 +95,7 @@ bool getTriggerState()
 
 void setOutput()
 {
+  static double previousDacValue = -1;
   if ((state & STATE_ONOFF) && getTriggerState())
   {
     double newDacValue = 0; //Output in mV -> mA
@@ -115,12 +116,17 @@ void setOutput()
 
     //Adjust for R17 Value
     newDacValue *= (double)settings->r17Value / 1000.0;
-    debug_printb(F("New DAC Value:"), "%d\n", (int)round(newDacValue));
-    dac.setValue(round(newDacValue));
+    if (previousDacValue != newDacValue)
+    {
+      debug_printb(F("New DAC Value:"), "%d\n", (int)round(newDacValue));
+      dac.setValue(round(newDacValue));
+      previousDacValue = newDacValue;
+    }
   }
   else
   {
     dac.setValue(0);
+    previousDacValue = -1;
   }
 }
 

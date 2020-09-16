@@ -406,8 +406,8 @@ void setup()
 
   //Setup Encoder
   encoder = new ClickEncoder(P_ENC1, P_ENC2, P_ENCBTN, ENC_STEPS);
-  Timer1.initialize(1000);
-  Timer1.attachInterrupt(timerIsr);
+  Timer3.initialize(1000);
+  Timer3.attachInterrupt(timerIsr);
   encoder->setAccelerationEnabled(true);
   encoder->setDoubleClickEnabled(false);
   encoder->setHoldTime(500);

@@ -6,7 +6,7 @@
 #include <Arduino.h>
 #include <ClickEncoder.h>
 #include <OneButton.h>
-#include <TimerOne.h>
+#include <TimerOneThree.h>
 #include <MCP4725.h>
 #include <MCP342x.h>
 #include <PacketSerial.h>

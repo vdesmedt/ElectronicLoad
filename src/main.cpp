@@ -351,10 +351,10 @@ void actuateReadings()
   }
 }
 
-//TODO Adjust PWM's from settings (need scrollable menu)
 void adjustFanSpeed()
 {
-  static uint16_t fanLevelPwm[] = {0, 900, 1023};
+  static int fanLevelPwm[] = {0, 128, 255};
+  static uint8_t previousLevel = -1;
   switch (fanLevelState)
   {
   case 0:
@@ -372,7 +372,14 @@ void adjustFanSpeed()
       setFanLevel(1);
     break;
   }
-  analogWrite(P_FAN, fanLevelPwm[fanLevelState]);
+  if (fanLevelState != previousLevel)
+  {
+    int newPwmValue = fanLevelPwm[fanLevelState];
+    debug_printb(F("New Fan Level"), "%d / %d\n", fanLevelState, newPwmValue);
+    previousLevel = fanLevelState;
+    digitalWrite(P_FAN_ONOFF, fanLevelState > 0);
+    analogWrite(P_FAN_PWM, newPwmValue);
+  }
 }
 
 void LogData()
@@ -405,8 +412,9 @@ void setup()
   mainLcd.clearBuffer();
 
   pinMode(P_LM35, INPUT);
-  pinMode(P_FAN, OUTPUT);
-  digitalWrite(P_FAN, LOW);
+  pinMode(P_FAN_ONOFF, OUTPUT);
+  pinMode(P_FAN_PWM, OUTPUT);
+  digitalWrite(P_FAN_ONOFF, LOW);
   pinMode(P_LOADON_LED, OUTPUT);
   pinMode(P_TRIGGER, INPUT_PULLUP);
 

@@ -14,7 +14,6 @@
 #define P_LOADON_BTN 19
 #define P_LOADON_LED 15
 #define P_LM35 A6
-#define P_FAN 5
 #define P_FAN_ONOFF A1
 #define P_FAN_PWM 12
 #endif

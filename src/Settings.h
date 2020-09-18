@@ -8,7 +8,7 @@
 #include <SPIFlash.h>
 #include "define.h"
 
-#define SETTINGS_VERSION 0x08
+#define SETTINGS_VERSION 0x09
 struct Settings
 {
     uint8_t version = (SETTINGS_VERSION << 1);                    //LSB to 1 means dirty
@@ -25,6 +25,8 @@ struct Settings
     uint16_t triggerTimer = 1000;                                 //Milliseconds
     uint8_t loggingType = 0;                                      //Loggin type (None, Serial, RFM69)
     uint16_t loggingInterval = 10;                                //ms
+    int16_t maxCurrent = 3000;                                   //mA
+    int16_t maxVoltage = 25000;                                  //mV
 };
 
 extern Settings *settings;

@@ -50,6 +50,12 @@
 #define STATE_ONOFF 1
 #define STATE_SUSPICIOUS_CELL_COUNT (1 << 3)
 
+#define ALERT_SUSPICIOUS_CELL_COUNT (1 << 0)
+#define ALERT_MAXTEMP (1 << 1)
+#define ALERT_MAX_CURRENT (1 << 2)
+#define ALERT_MAX_VOLTAGE (1 << 3)
+#define ALERT_CUTOFF (1 << 4)
+
 #define BATT_TYPE_COUNT 4
 
 #define TRIGGER_TYPE_COUNT 3

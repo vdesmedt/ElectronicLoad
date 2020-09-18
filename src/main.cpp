@@ -8,10 +8,10 @@
 const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
 const char *workingModes[WORKINGMODE_COUNT] = {"CCur", "CRes", "CPow", "Batt"};
-const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
 const char *triggerType[TRIGGER_TYPE_COUNT] = {"Off", "Flip", "Timr"};
 const char *loggingMode[LOGGIN_MODE_COUNT] = {"Off", "St Ser", "Bi Ser", "RFM69"};
 
+const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
 const int8_t battMinVoltage[BATT_TYPE_COUNT] = {30, 8, 25, 18};  // 1/10th Volt
 const int8_t battMaxVoltage[BATT_TYPE_COUNT] = {42, 15, 36, 23}; // 1/10th Volt
 
@@ -25,6 +25,7 @@ uint8_t lcdRefreshMask = 0;
 unsigned long iddleSince = 0;
 
 uint8_t state = 0;
+uint8_t alerts = 0;
 #define fanLevelState ((state >> 1) & 0x03)
 #define setFanLevel(l) state = (state & ~(0x03 << 1)) | ((l & 0x03) << 1)
 
@@ -138,16 +139,6 @@ void refreshDisplay()
   static unsigned long lastRefresh = millis();
   if ((lcdRefreshMask | UM_ALL) == 0 && millis() < lastRefresh + 500)
     return;
-  /*
-  mainLcd.clearBuffer();
-  mainLcd.setFont(u8g2_font_6x10_tf);
-  mainLcd.drawStr(0, 10, "ABCDEFGHIJKLM");
-  mainLcd.drawStr(0, 20, "NOPQRSTUVWXYZ");
-  mainLcd.drawStr(0, 30, "abcdefghijklm");
-  mainLcd.drawStr(0, 40, "nopqrstuvwxyz");
-  mainLcd.sendBuffer();
-  return;
-  */
 
   static char buffer[10];
   mainLcd.clearBuffer();
@@ -180,7 +171,7 @@ void refreshDisplay()
 
     //Cell count alert
     if (state & STATE_SUSPICIOUS_CELL_COUNT)
-      mainLcd.drawStr(68, 12, "!");
+      mainLcd.drawStr(69, 12, "!");
 
     //Units
     mainLcd.drawStr(50, 30, "V");
@@ -192,6 +183,31 @@ void refreshDisplay()
   }
 
   menu->Print();
+
+  //Alerts
+  if (alerts != 0)
+  {
+    uint8_t brd = 9;
+    mainLcd.setDrawColor(0);
+    mainLcd.drawBox(brd, brd, 128 - 2 * brd, 64 - 2 * brd);
+    mainLcd.setDrawColor(1);
+    brd += 1;
+    mainLcd.drawFrame(brd, brd, 128 - 2 * brd, 64 - 2 * brd);
+    brd += 2;
+    mainLcd.drawFrame(brd, brd, 128 - 2 * brd, 64 - 2 * brd);
+    if (alerts & ALERT_MAX_CURRENT)
+      mainLcd.drawStr(23, 27, "Max Current !!!");
+    if (alerts & ALERT_MAX_VOLTAGE)
+      mainLcd.drawStr(23, 27, "Max Voltage !!!");
+    else if (alerts & ALERT_MAXTEMP)
+      mainLcd.drawStr(23, 27, " Max Temp !!!");
+    else if (alerts & ALERT_CUTOFF)
+      mainLcd.drawStr(23, 27, "Cut Off Reached");
+    else if (alerts & ALERT_SUSPICIOUS_CELL_COUNT)
+      mainLcd.drawStr(23, 27, "Cell count !!!");
+    mainLcd.drawStr(20, 42, "[Press Rotary B]");
+  }
+
   mainLcd.sendBuffer();
   lcdRefreshMask = UM_NONE;
 }
@@ -199,6 +215,8 @@ void refreshDisplay()
 void loadButton_click()
 {
   iddleSince = millis();
+  if (alerts)
+    return;
   if (state & STATE_ONOFF)
     LoadOff();
   else
@@ -208,6 +226,8 @@ void loadButton_click()
 void loadButton_longClick()
 {
   iddleSince = millis();
+  if (alerts)
+    return;
   if (!(state & STATE_ONOFF))
   {
     _rtcTimer.reset();
@@ -276,6 +296,10 @@ void DetectSuspiciousCellCount()
   {
     lcdRefreshMask |= UM_ALERT;
     state = suspicious ? state | STATE_SUSPICIOUS_CELL_COUNT : state & ~STATE_SUSPICIOUS_CELL_COUNT;
+    if (state & STATE_ONOFF)
+    {
+      alerts = suspicious ? alerts | ALERT_SUSPICIOUS_CELL_COUNT : alerts & ~STATE_SUSPICIOUS_CELL_COUNT;
+    }
   }
 }
 
@@ -487,16 +511,31 @@ void loop()
 
   pushButton->tick();
   actuateReadings();
-  if (readTemperature > settings->fanTemps[2])
+
+  //Alerts
+  if (state & STATE_ONOFF && readTemperature > settings->fanTemps[2])
   {
-    setFanLevel(3);
+    alerts |= ALERT_MAXTEMP;
+    LoadOff();
+  }
+  if (readCurrent > settings->maxCurrent)
+  {
+    alerts |= ALERT_MAX_CURRENT;
+    LoadOff();
+  }
+  if (readVoltage > settings->maxVoltage)
+  {
+    alerts |= ALERT_MAX_VOLTAGE;
     LoadOff();
   }
   if (state & STATE_ONOFF && settings->mode == MODE_BA)
   {
     int16_t cutOffVoltage = settings->battCellCount * settings->battCutOff[settings->battType];
     if (readVoltage < cutOffVoltage)
+    {
+      alerts |= ALERT_CUTOFF;
       LoadOff();
+    }
   }
 
   adjustFanSpeed();
@@ -514,7 +553,8 @@ void loop()
   if (enc != 0)
   {
     iddleSince = millis();
-    menu->EncoderInc(enc);
+    if (!alerts)
+      menu->EncoderInc(enc);
   }
 
   //Encoder Button
@@ -522,12 +562,16 @@ void loop()
   if (buttonState == ClickEncoder::Clicked)
   {
     iddleSince = millis();
-    menu->Click();
+    if (alerts)
+      alerts = 0;
+    else
+      menu->Click();
   }
   else if (buttonState == ClickEncoder::Held && oldState != ClickEncoder::Held)
   {
     iddleSince = millis();
-    menu->LongClick();
+    if (!alerts)
+      menu->LongClick();
   }
   oldState = buttonState;
 

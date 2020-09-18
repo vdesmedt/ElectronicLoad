@@ -147,6 +147,35 @@ bool menu_FanHysteresisChanged(int32_t newValue)
     return false;
 }
 
+bool menu_MaxCurrentChanged(int32_t newValue)
+{
+    if (newValue > 0 && newValue <= 5000)
+    {
+        settings->maxCurrent = newValue;
+        settings->version |= 0x01;
+        return true;
+    }
+    else if (newValue <= 0 || newValue > 5000)
+    {
+        settings->maxCurrent = 3000;
+    }
+    return false;
+}
+bool menu_MaxVoltageChanged(int32_t newValue)
+{
+    if (newValue > 0 && newValue <= 30000)
+    {
+        settings->maxVoltage = newValue;
+        settings->version |= 0x01;
+        return true;
+    }
+    else if (newValue <= 0 || newValue > 30000)
+    {
+        settings->maxCurrent = 20000;
+    }
+    return false;
+}
+
 bool menu_R17Changed(int32_t newValue)
 {
     if (newValue > 900 && newValue < 1100)
@@ -270,6 +299,16 @@ void setupMenu()
     vmi = menu->AddValue(settings->fanHysteresis, 3, 1, 0, y += yshift, menu_FanHysteresisChanged);
     vmi->SetPrefix(F("Hysteresis  : "));
     vmi->SetSuffix("\xB0\x43");
+    vmi->DigitIndex = 1;
+
+    vmi = menu->AddValue(settings->maxCurrent, 5, 3, 0, y += yshift, menu_MaxCurrentChanged);
+    vmi->SetPrefix(F("Max current : "));
+    vmi->SetSuffix("mA");
+    vmi->DigitIndex = 1;
+
+    vmi = menu->AddValue(settings->maxVoltage, 6, 3, 0, y += yshift, menu_MaxVoltageChanged);
+    vmi->SetPrefix(F("Max voltage : "));
+    vmi->SetSuffix("mA");
     vmi->DigitIndex = 1;
 
     menu->Configure(&mainLcd, menu_pageChanged);

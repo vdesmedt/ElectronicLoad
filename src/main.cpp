@@ -7,7 +7,7 @@
 
 const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
-const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
+const char *workingModes[WORKINGMODE_COUNT] = {"CCur", "CRes", "CPow", "Batt"};
 const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
 const char *triggerType[TRIGGER_TYPE_COUNT] = {"Off", "Flip", "Timr"};
 const char *loggingMode[LOGGIN_MODE_COUNT] = {"Off", "St Ser", "Bi Ser", "RFM69"};
@@ -155,11 +155,13 @@ void refreshDisplay()
   {
     mainLcd.setFont(MMDigit12);
     //Voltage
-    mainLcd.drawStr(0, 32, dtostrf((double)readVoltage / 1000, 6, 3, buffer));
+    mainLcd.drawStr(10, 32, dtostrf((double)readVoltage / 1000, 6, 3, buffer));
     if (readVoltage / 1000 < 10)
-      mainLcd.drawStr(0, 32, "0");
+      mainLcd.drawStr(10, 32, "0");
     //Current
-    mainLcd.drawStr(0, 48, dtostrf((double)readCurrent / 1000, 6, 3, buffer));
+    mainLcd.drawStr(10, 48, dtostrf((double)readCurrent / 1000, 6, 3, buffer));
+    if (readCurrent / 1000 < 10)
+      mainLcd.drawStr(10, 48, "0");
 
     mainLcd.setFont(MMDigit08);
     //Temp
@@ -181,8 +183,8 @@ void refreshDisplay()
       mainLcd.drawStr(68, 12, "!");
 
     //Units
-    mainLcd.drawStr(40, 30, "V");
-    mainLcd.drawStr(40, 46, "A");
+    mainLcd.drawStr(50, 30, "V");
+    mainLcd.drawStr(50, 46, "A");
     mainLcd.drawStr(111, 24, "W");
     mainLcd.drawStr(111, 11, "\xB0\x43"); //°C
     mainLcd.drawGlyph(124, 11, 3 + fanLevelState);

@@ -202,15 +202,15 @@ void setupMenu()
     //Page 0: Main Page
     menu->AddPage();
     cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 0, 12, menu_modeChanged, false);
-    cmi->SetPrefix(F("Mode: "));
+    cmi->SetPrefix(F("Mode;"));
     cmi->currentChoiceIndex = settings->mode;
 
-    setBattCellCountMenuItem = menu->AddValue(settings->battCellCount, 1, 0, 50, 12, menu_battCellCountChanged);
+    setBattCellCountMenuItem = menu->AddValue(settings->battCellCount, 1, 0, 52, 12, menu_battCellCountChanged);
     setBattCellCountMenuItem->SetPrefix(F("["));
     setBattCellCountMenuItem->SetSuffix("\x02]");
 
     setValueMenuItem = menu->AddValue(settings->setValues[settings->mode], 6, 3, 0, 60, menu_setValueChanged);
-    setValueMenuItem->SetPrefix(F("Set:"));
+    setValueMenuItem->SetPrefix(F("Set;"));
     setValueMenuItem->SetSuffix(modeUnits[settings->mode]);
 
     menu->AddGoToPage(1, "[Settings]", 74, 60);

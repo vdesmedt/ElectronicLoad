@@ -358,13 +358,13 @@ void adjustFanSpeed()
   switch (fanLevelState)
   {
   case 0:
-    if (readTemperature > settings->fanTemps[0] + settings->fanHysteresis)
+    if (readTemperature > settings->fanTemps[0])
       setFanLevel(1);
     break;
   case 1:
     if (readTemperature < settings->fanTemps[0] - settings->fanHysteresis)
       setFanLevel(0);
-    else if (readTemperature > settings->fanTemps[1] + settings->fanHysteresis)
+    else if (readTemperature > settings->fanTemps[1])
       setFanLevel(2);
     break;
   case 2:

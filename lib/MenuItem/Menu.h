@@ -33,5 +33,8 @@ private:
     bool _selected = false;
     void (*_onPageChange)(uint8_t, uint8_t);
     void (*_onScroll)(uint8_t);
+    unsigned long _lastInteraction = millis();
+    uint8_t _focusTimeoutSec = 10;
+    bool _iddle = false;
 };
 #endif

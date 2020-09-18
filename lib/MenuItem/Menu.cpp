@@ -47,6 +47,12 @@ void Menu::Configure(U8G2 *lcd, void (*onPageChange)(uint8_t, uint8_t))
 
 void Menu::EncoderInc(int8_t steps)
 {
+    _lastInteraction = millis();
+    if (_iddle)
+    {
+        _iddle = false;
+        return;
+    }
     if (this->_selected)
     {
         MenuItem *mi = this->_menuItems[this->_currentItem];
@@ -79,6 +85,12 @@ void Menu::EncoderInc(int8_t steps)
 }
 void Menu::Click()
 {
+    _lastInteraction = millis();
+    if (_iddle)
+    {
+        _iddle = false;
+        return;
+    }
     MenuItem *mi = _menuItems[this->_currentItem];
     bool focus = _selected;
     uint8_t page = _currentPage;
@@ -95,12 +107,22 @@ void Menu::Click()
 }
 void Menu::LongClick()
 {
+    _lastInteraction = millis();
+    if (_iddle)
+    {
+        _iddle = false;
+        return;
+    }
     MenuItem *mi = this->_menuItems[this->_currentItem];
     mi->LongClick(&_selected, &_currentPage);
 }
 
 void Menu::Print()
 {
+    if (_lastInteraction + _focusTimeoutSec * 1000 < millis())
+    {
+        _iddle = true;
+    }
     MenuItem *mi;
     for (int i = this->_pageFirstIndexes[this->_currentPage]; i < this->_pageFirstIndexes[this->_currentPage + 1]; i++)
     {
@@ -110,7 +132,7 @@ void Menu::Print()
             uint8_t y = mi->getCy() - _scrollLevel;
             if (mi->IsShown())
             {
-                mi->Print(_lcd, y, mi == _menuItems[_currentItem], _selected);
+                mi->Print(_lcd, y, !_iddle && mi == _menuItems[_currentItem], !_iddle && _selected);
             }
         }
     }

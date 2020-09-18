@@ -38,3 +38,38 @@ bool MenuItem::IsShown()
 {
     return _state & IS_SHOW;
 }
+
+void MenuItem::Print(U8G2 *lcd, uint8_t y, bool current, bool hasFocus)
+{
+    char buffer[20];
+    uint8_t x = _cursorX;
+    strcpy_P(buffer, (char *)this->GetPrefix());
+    lcd->drawStr(x, y, buffer);
+    x += lcd->getStrWidth(buffer) + 1;
+    x = PrintLabel(lcd, x, y, current, hasFocus) + 1;
+    lcd->drawStr(x, y, this->GetSufix());
+}
+
+uint8_t MenuItem::PrintLabel(U8G2 *lcd, uint8_t x, uint8_t y, bool current, bool hasFocus)
+{
+    if (current)
+    {
+        uint8_t pi = lcd->getColorIndex();
+        if (!hasFocus || (millis() / 100) % 10 < 6)
+        {
+            lcd->drawBox(
+                x - 1,
+                y - lcd->getMaxCharHeight() + 1,
+                lcd->getStrWidth(this->GetLabel()) + 2,
+                lcd->getMaxCharHeight());
+            lcd->setColorIndex(0);
+        }
+        lcd->drawStr(x, y, this->GetLabel());
+        lcd->setColorIndex(pi);
+    }
+    else
+    {
+        lcd->drawStr(x, y, this->GetLabel());
+    }
+    return x + lcd->getStrWidth(this->GetLabel()) + 1;
+}

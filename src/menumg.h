@@ -101,13 +101,6 @@ void menu_pageChanged(uint8_t newPageIndex, uint8_t scrollLevel)
 {
 }
 
-bool menu_BackLightChanged(int8_t newValue)
-{
-    settings->backlight = newValue;
-    settings->version |= 0x01;
-    return true;
-}
-
 bool menu_FanOnTemp1Changed(int32_t newValue)
 {
     if (newValue <= settings->fanTemps[1] && newValue >= 0)
@@ -208,41 +201,43 @@ void setupMenu()
     menu = new Menu(4, 20);
     //Page 0: Main Page
     menu->AddPage();
-    cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 24, 12, menu_modeChanged, false);
+    cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 0, 12, menu_modeChanged, false);
+    cmi->SetPrefix(F("Mode: "));
     cmi->currentChoiceIndex = settings->mode;
 
-    setBattCellCountMenuItem = menu->AddValue(settings->battCellCount, 1, 0, 42, 12, menu_battCellCountChanged);
-    setBattCellCountMenuItem->SetSuffix("\x07");
+    setBattCellCountMenuItem = menu->AddValue(settings->battCellCount, 1, 0, 50, 12, menu_battCellCountChanged);
+    setBattCellCountMenuItem->SetPrefix(F("["));
+    setBattCellCountMenuItem->SetSuffix("\x02]");
 
-    setValueMenuItem = menu->AddValue(settings->setValues[settings->mode], 6, 3, 0, 64, menu_setValueChanged);
+    setValueMenuItem = menu->AddValue(settings->setValues[settings->mode], 6, 3, 0, 60, menu_setValueChanged);
     setValueMenuItem->SetPrefix(F("Set:"));
     setValueMenuItem->SetSuffix(modeUnits[settings->mode]);
 
-    menu->AddGoToPage(1, "[Conf]", 80, 64);
+    menu->AddGoToPage(1, "[Settings]", 74, 60);
     //Page 1: Settings
     menu->AddPage();
     menu->AddGoToPage(0, "[\x01Main]", 0, y += yshift);
 
     cmi = menu->AddMultiChoice(loggingMode, LOGGIN_MODE_COUNT, 0, y += yshift, menu_LoggingChanged, true);
-    cmi->SetPrefix(F("Logging     :"));
+    cmi->SetPrefix(F("Logging      : "));
     cmi->currentChoiceIndex = settings->loggingType;
 
     vmi = menu->AddValue(settings->loggingInterval, 5, 0, 0, y += yshift, menu_loggingIntervalChanged);
-    vmi->SetPrefix(F("Log. Interv.:"));
+    vmi->SetPrefix(F("Log Interval : "));
 
     cmi = menu->AddMultiChoice(triggerType, TRIGGER_TYPE_COUNT, 0, y += yshift, menu_triggerTypeChanged, true);
-    cmi->SetPrefix(F("Trigger Type:"));
+    cmi->SetPrefix(F("Trigger Type : "));
     cmi->currentChoiceIndex = settings->triggerType;
 
     vmi = menu->AddValue(settings->triggerTimer, 6, 3, 0, y += yshift, menu_triggerTimeChanged);
-    vmi->SetPrefix(F("Trg Timer:"));
+    vmi->SetPrefix(F("Trg Timer    : "));
 
     cmi = menu->AddMultiChoice(battTypes, BATT_TYPE_COUNT, 0, y += yshift, menu_BattTypeChanged, true);
-    cmi->SetPrefix(F("Battery Type:"));
+    cmi->SetPrefix(F("Battery Type : "));
     cmi->currentChoiceIndex = settings->battType;
 
     setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 5, 3, 0, y += yshift, menu_cutOffChanged);
-    setBattCutOffMenuItem->SetPrefix(F("Batt Cut Off:"));
+    setBattCutOffMenuItem->SetPrefix(F("Batt Cut Off : "));
     setBattCutOffMenuItem->SetSuffix("V");
     setBattCutOffMenuItem->DigitIndex = 1;
 
@@ -254,32 +249,28 @@ void setupMenu()
     menu->AddGoToPage(1, "[\x01Settings]", 0, y += yshift);
 
     vmi = menu->AddValue(settings->r17Value, 5, 1, 0, y += yshift, menu_R17Changed);
-    vmi->SetPrefix(F("R17 Value   :"));
+    vmi->SetPrefix(F("R17 Value   : "));
     vmi->SetSuffix("m\xF4");
 
     vmi = menu->AddValue(settings->fanTemps[0], 4, 1, 0, y += yshift, menu_FanOnTemp1Changed);
-    vmi->SetPrefix(F("Fan Level 1 :"));
-    vmi->SetSuffix("\xDF\x43");
+    vmi->SetPrefix(F("Fan Level 1 : "));
+    vmi->SetSuffix("\xB0\x43");
     vmi->DigitIndex = 1;
 
     vmi = menu->AddValue(settings->fanTemps[1], 4, 1, 0, y += yshift, menu_FanOnTemp2Changed);
-    vmi->SetPrefix(F("Fan Level 2 :"));
-    vmi->SetSuffix("\xDF\x43");
+    vmi->SetPrefix(F("Fan Level 2 : "));
+    vmi->SetSuffix("\xB0\x43");
     vmi->DigitIndex = 1;
 
     vmi = menu->AddValue(settings->fanTemps[2], 4, 1, 0, y += yshift, menu_FanOnTemp3Changed);
-    vmi->SetPrefix(F("Cut Off     :"));
-    vmi->SetSuffix("\xDF\x43");
+    vmi->SetPrefix(F("Cut Off     : "));
+    vmi->SetSuffix("\xB0\x43");
     vmi->DigitIndex = 1;
 
     vmi = menu->AddValue(settings->fanHysteresis, 3, 1, 0, y += yshift, menu_FanHysteresisChanged);
-    vmi->SetPrefix(F("Hysteresis  :"));
-    vmi->SetSuffix("\xDF\x43");
+    vmi->SetPrefix(F("Hysteresis  : "));
+    vmi->SetSuffix("\xB0\x43");
     vmi->DigitIndex = 1;
-
-    cmi = menu->AddMultiChoice(onOffChoices, 2, 0, y += yshift, menu_BackLightChanged, true);
-    cmi->currentChoiceIndex = settings->backlight;
-    cmi->SetPrefix(F("Backlight   :"));
 
     menu->Configure(&mainLcd, menu_pageChanged);
 }

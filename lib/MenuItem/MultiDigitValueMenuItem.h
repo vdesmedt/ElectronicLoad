@@ -32,7 +32,7 @@ public:
     void SetPrecision(uint8_t precision) { _precision = precision; }
     uint8_t GetLength() { return this->_lenght; }
     void SetLength(uint8_t length) { this->_lenght = length; }
-
+    uint8_t PrintLabel(U8G2 *lcd, uint8_t x, uint8_t y, bool current, bool hasFocus);
     bool AllowNeg = false;
     uint8_t DigitIndex = 0;
 

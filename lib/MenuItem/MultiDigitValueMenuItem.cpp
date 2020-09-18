@@ -91,7 +91,60 @@ uint8_t MultiDigitValueMenuItem::GetCursorOffset(bool focus)
     }
 }
 
-enum MenuItem::cursorType MultiDigitValueMenuItem::GetCursorType(bool focus)
+enum MultiDigitValueMenuItem::cursorType MultiDigitValueMenuItem::GetCursorType(bool focus)
 {
     return focus ? cursorType::Blink : cursorType::Normal;
+}
+
+uint8_t MultiDigitValueMenuItem::PrintLabel(U8G2 *lcd, uint8_t x, uint8_t y, bool current, bool hasFocus)
+{
+    const char *lbl = GetLabel();
+    uint8_t pi = lcd->getColorIndex();
+
+    if (current)
+    {
+        if (hasFocus)
+        {
+            uint8_t cu = GetCursorOffset(true) - _prefixLenth;
+            char *buffer = " ";
+            for (uint8_t i = 0; i < strlen(lbl); i++)
+            {
+                buffer[0] = lbl[i];
+                if (i == cu && (millis() / 100) % 10 < 6)
+                {
+                    lcd->drawBox(
+                        x - 1,
+                        y - lcd->getMaxCharHeight() + 1,
+                        lcd->getStrWidth(buffer) + 2,
+                        lcd->getMaxCharHeight());
+                    lcd->setColorIndex(0);
+                    lcd->drawStr(x, y, buffer);
+                    lcd->setColorIndex(pi);
+                }
+                else
+                {
+                    lcd->drawStr(x, y, buffer);
+                }
+                x += lcd->getStrWidth(buffer) + 1;
+            }
+            return x - 1;
+        }
+        else
+        {
+            lcd->drawBox(
+                x - 1,
+                y - lcd->getMaxCharHeight() + 1,
+                lcd->getStrWidth(lbl) + 2,
+                lcd->getMaxCharHeight());
+            lcd->setColorIndex(0);
+            lcd->drawStr(x, y, this->GetLabel());
+            lcd->setColorIndex(pi);
+            return x + lcd->getStrWidth(lbl);
+        }
+    }
+    else
+    {
+        lcd->drawStr(x, y, lbl);
+        return x + lcd->getStrWidth(lbl);
+    }
 }

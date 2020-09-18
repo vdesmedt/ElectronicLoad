@@ -9,6 +9,7 @@ Menu::Menu(uint8_t pageCount, uint8_t itemCount)
     this->_currentPage = 0;
     this->_currentItem = 0;
 }
+
 MultiChoiceMenuItem *Menu::AddMultiChoice(const char *choices[], uint8_t choiceCount, uint8_t cursorX, uint8_t cursorY, bool (*onChange)(int8_t), bool switchOnClick)
 {
     MultiChoiceMenuItem *mi = new MultiChoiceMenuItem(choices, choiceCount, cursorX, cursorY, onChange);
@@ -33,7 +34,7 @@ void Menu::AddPage()
     this->_pageFirstIndexes[_currentPage] = this->_currentItem;
     this->_currentPage++;
 }
-void Menu::Configure(U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI *lcd, void (*onPageChange)(uint8_t, uint8_t))
+void Menu::Configure(U8G2 *lcd, void (*onPageChange)(uint8_t, uint8_t))
 {
     this->_onPageChange = onPageChange;
     this->_pageFirstIndexes[_currentPage] = _currentItem;
@@ -42,8 +43,6 @@ void Menu::Configure(U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI *lcd, void (*onPage
     this->_selected = false;
     this->_lcd = lcd;
     this->_onPageChange(this->_currentPage, 0);
-    this->Print();
-    this->PrintCursor();
 }
 
 void Menu::EncoderInc(int8_t steps)
@@ -51,11 +50,7 @@ void Menu::EncoderInc(int8_t steps)
     if (this->_selected)
     {
         MenuItem *mi = this->_menuItems[this->_currentItem];
-        if (mi->RotaryIncrement(steps))
-        {
-            this->PrintItem(mi);
-            this->PrintCursor();
-        }
+        mi->RotaryIncrement(steps);
     }
     else
     {
@@ -76,7 +71,7 @@ void Menu::EncoderInc(int8_t steps)
 
         //Scroll down
         if (steps > 0 && _menuItems[_currentItem]->getCy() - _scrollLevel > _lcd->getHeight())
-            _scrollLevel = _menuItems[_currentItem]->getCy() - _lcd->getHeight();
+            _scrollLevel = _menuItems[_currentItem]->getCy() - _lcd->getHeight() + 1;
         //Scroll Up
         if (steps < 0 && _menuItems[_currentItem]->getCy() < _scrollLevel + _lcd->getMaxCharHeight())
             _scrollLevel = _menuItems[_currentItem]->getCy() - _lcd->getMaxCharHeight();
@@ -87,7 +82,7 @@ void Menu::Click()
     MenuItem *mi = _menuItems[this->_currentItem];
     bool focus = _selected;
     uint8_t page = _currentPage;
-    bool refresh = mi->Click(&focus, &page);
+    mi->Click(&focus, &page);
     _selected = focus;
 
     if (page != _currentPage)
@@ -97,17 +92,11 @@ void Menu::Click()
         _currentItem = _pageFirstIndexes[_currentPage];
         this->_onPageChange(_currentPage, _scrollLevel);
     }
-
-    if (refresh)
-        this->Print();
-    else
-        this->PrintCursor();
 }
 void Menu::LongClick()
 {
     MenuItem *mi = this->_menuItems[this->_currentItem];
     mi->LongClick(&_selected, &_currentPage);
-    this->PrintCursor();
 }
 
 void Menu::Print()
@@ -117,34 +106,12 @@ void Menu::Print()
     {
         mi = _menuItems[i];
         if (mi->getCy() >= _scrollLevel && mi->getCy() - _scrollLevel <= _lcd->getHeight())
-            this->PrintItem(this->_menuItems[i]);
-    }
-    this->PrintCursor();
-}
-
-void Menu::PrintItem(MenuItem *mi)
-{
-    if (mi->IsShown())
-    {
-        _lcd->setCursor(mi->getCx(), mi->getCy() - _scrollLevel);
-        _lcd->print(mi->GetPrefix());
-        if (mi == _menuItems[_currentItem])
         {
-            char buffer[20];
-            strcpy_P(buffer, (char *)mi->GetPrefix());
-            _lcd->drawBox(mi->getCx() + _lcd->getStrWidth(buffer) - 1, mi->getCy() - _lcd->getMaxCharHeight() + 1 - _scrollLevel, _lcd->getStrWidth(mi->GetLabel()) + 2, _lcd->getMaxCharHeight());
-            _lcd->setColorIndex(0);
-            _lcd->print(mi->GetLabel());
-            _lcd->setColorIndex(1);
+            uint8_t y = mi->getCy() - _scrollLevel;
+            if (mi->IsShown())
+            {
+                mi->Print(_lcd, y, mi == _menuItems[_currentItem], _selected);
+            }
         }
-        else
-        {
-            _lcd->print(mi->GetLabel());
-        }
-        _lcd->print(mi->GetSufix());
     }
-}
-
-void Menu::PrintCursor()
-{
 }

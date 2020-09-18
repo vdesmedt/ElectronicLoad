@@ -2,7 +2,7 @@
 #define MenuItem_h_
 
 #include <Arduino.h>
-#include <LiquidCrystal_PCF8574.h>
+#include <U8g2lib.h>
 
 #define IS_SHOW 1
 
@@ -29,6 +29,8 @@ public:
     virtual bool RotaryIncrement(int8_t steps) { return true; };
     virtual bool Click(bool *focus, uint8_t *page) { return false; };
     virtual bool LongClick(bool *focus, uint8_t *page) { return false; };
+    virtual void Print(U8G2 *lcd, uint8_t y, bool current, bool hasFocus);
+    virtual uint8_t PrintLabel(U8G2 *lcd, uint8_t x, uint8_t y, bool current, bool hasFocus);
 
     virtual void Hide() { _state &= ~IS_SHOW; }
     virtual void Show();
@@ -41,10 +43,10 @@ public:
 
 protected:
     const __FlashStringHelper *_prefix = NULL;
-    uint8_t _prefixLenth;
+    uint8_t _prefixLenth = 0;
     const char *_suffix = NULL;
     uint8_t _state = IS_SHOW;
-    uint8_t* _labelFont = NULL;
+    uint8_t *_labelFont = NULL;
 
 private:
     uint8_t _cursorX = 0;

@@ -9,8 +9,8 @@ const char *onOffChoices[] = {"On ", "Off"};
 const char *modeUnits[WORKINGMODE_COUNT] = {"A", "\xF4", "W", "A"};
 const char *workingModes[WORKINGMODE_COUNT] = {"CC", "CR", "CP", "Ba"};
 const char *battTypes[BATT_TYPE_COUNT] = {"LiPo", "NiMh", "LiFe", "Pb"};
-const char *triggerType[TRIGGER_TYPE_COUNT] = {"Off ", "Flip", "Timr"};
-const char *loggingMode[LOGGIN_MODE_COUNT] = {"Off  ", "St Ser ", "Bi Ser", "RFM69"};
+const char *triggerType[TRIGGER_TYPE_COUNT] = {"Off", "Flip", "Timr"};
+const char *loggingMode[LOGGIN_MODE_COUNT] = {"Off", "St Ser", "Bi Ser", "RFM69"};
 
 const int8_t battMinVoltage[BATT_TYPE_COUNT] = {30, 8, 25, 18};  // 1/10th Volt
 const int8_t battMaxVoltage[BATT_TYPE_COUNT] = {42, 15, 36, 23}; // 1/10th Volt
@@ -138,42 +138,55 @@ void refreshDisplay()
   static unsigned long lastRefresh = millis();
   if ((lcdRefreshMask | UM_ALL) == 0 && millis() < lastRefresh + 500)
     return;
+  /*
+  mainLcd.clearBuffer();
+  mainLcd.setFont(u8g2_font_6x10_tf);
+  mainLcd.drawStr(0, 10, "ABCDEFGHIJKLM");
+  mainLcd.drawStr(0, 20, "NOPQRSTUVWXYZ");
+  mainLcd.drawStr(0, 30, "abcdefghijklm");
+  mainLcd.drawStr(0, 40, "nopqrstuvwxyz");
+  mainLcd.sendBuffer();
+  return;
+  */
+
   static char buffer[10];
   mainLcd.clearBuffer();
   if (menu->GetCurrentPage() == 0)
   {
     mainLcd.setFont(MMDigit12);
     //Voltage
-    mainLcd.drawStr(0, 30, dtostrf((double)readVoltage / 1000, 6, 3, buffer));
+    mainLcd.drawStr(0, 32, dtostrf((double)readVoltage / 1000, 6, 3, buffer));
     if (readVoltage / 1000 < 10)
-      mainLcd.drawStr(0, 30, "0");
+      mainLcd.drawStr(0, 32, "0");
     //Current
-    mainLcd.drawStr(0, 45, dtostrf((double)readCurrent / 1000, 6, 3, buffer));
+    mainLcd.drawStr(0, 48, dtostrf((double)readCurrent / 1000, 6, 3, buffer));
 
     mainLcd.setFont(MMDigit08);
     //Temp
-    snprintf(buffer, 10, "%d", readTemperature / 10);
-    mainLcd.drawStr(104, 26, buffer);
+    mainLcd.drawStr(89, 12, dtostrf((double)readTemperature / 10, 4, 1, buffer));
     //Power
-    mainLcd.drawStr(107, 36, dtostrf((double)readVoltage * readCurrent / 1000000, -4, 1, buffer));
+    mainLcd.drawStr(89, 24, dtostrf((double)readVoltage * readCurrent / 1000000, 4, 1, buffer));
+    //Total mAh
+    dtostrf(totalmAh / 3600000, 7, 1, buffer);
+    mainLcd.drawStr(71, 36, buffer);
     //Time & mAh
     _rtcTimer.getTime(buffer);
-    mainLcd.drawStr(89, 46, buffer);
+    mainLcd.drawStr(89, 48, buffer);
 
-    dtostrf(totalmAh / 3600000, 7, 1, buffer);
-    mainLcd.drawStr(59, 57, buffer);
-
-    mainLcd.setFont(u8g2_font_6x10_tf);
     //OnOff
-    mainLcd.setFont(u8g2_font_6x10_tf);
-    mainLcd.drawStr(0, 13, state & STATE_ONOFF ? "On" : "Off");
+    //mainLcd.drawStr(60, 12, state & STATE_ONOFF ? "On" : "Off");
+
+    //Cell count alert
+    if (state & STATE_SUSPICIOUS_CELL_COUNT)
+      mainLcd.drawStr(68, 12, "!");
 
     //Units
-    mainLcd.drawStr(40, 28, "V");
-    mainLcd.drawStr(40, 44, "A");
-    mainLcd.drawStr(123, 35, "W");
-    mainLcd.drawStr(117, 25, "\xb0\x43"); //°C
-    mainLcd.drawStr(111, 56, "mAh");
+    mainLcd.drawStr(40, 30, "V");
+    mainLcd.drawStr(40, 46, "A");
+    mainLcd.drawStr(111, 24, "W");
+    mainLcd.drawStr(111, 11, "\xB0\x43"); //°C
+    mainLcd.drawGlyph(124, 11, 3 + fanLevelState);
+    mainLcd.drawStr(111, 36, "mAh");
   }
 
   menu->Print();
@@ -285,7 +298,6 @@ void actuateReadings()
   static unsigned long lastTempUpdate = 0;
   if (lastTempUpdate + LCD_TEMP_MAX_UPDATE_RATE < millis())
   {
-
     uint16_t newTemperature = temperatureSMA(analogRead(P_LM35)) * 3.376; //1023/3.3 Step/V, 100°C/V
     if (newTemperature != readTemperature)
     {

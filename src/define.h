@@ -8,11 +8,14 @@
 #define P_LM35 A6
 #define P_FAN 6
 #else
-#define P_ENC1 21
-#define P_ENC2 22
+#define P_ENC1 22
+#define P_ENC2 21
 #define P_ENCBTN 20
 #define P_LOADON_BTN 19
 #define P_LOADON_LED 15
+#define P_VSENSE_BTN 14
+#define P_VSENSE_EXT 13
+
 #define P_LM35 A6
 #define P_FAN_ONOFF A1
 #define P_FAN_PWM 12
@@ -49,6 +52,7 @@
 
 #define STATE_ONOFF 1
 #define STATE_SUSPICIOUS_CELL_COUNT (1 << 3)
+#define STATE_VSENSE_EXT (1 << 4)
 
 #define ALERT_SUSPICIOUS_CELL_COUNT (1 << 0)
 #define ALERT_MAXTEMP (1 << 1)
@@ -68,7 +72,7 @@
 #define ENC_STEPS 2
 #else
 #define DAC_ADDR 0x61
-#define ENC_STEPS 4
+#define ENC_STEPS 2
 #endif
 #define ADC_ADDR 0x68
 #define RTC_ADDR 0x6F

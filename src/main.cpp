@@ -1,6 +1,6 @@
 #define DEBUG_BOARD false
 #define EDCL_DEBUG true
-#define DEBUG_TIMINGS EDCL_DEBUG && false
+#define DEBUG_TIMINGS EDCL_DEBUG && true
 #define DEBUG_MEMORY EDCL_DEBUG && true
 
 #include "header.h"
@@ -35,7 +35,8 @@ MCP79410_Timer _rtcTimer(RTC_ADDR);
 SPIFlash flash(P_FLASH_SS, 0xEF30);
 U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI mainLcd(U8G2_R0, /* cs=*/3, /* dc=*/1, /* reset=*/0);
 ClickEncoder *encoder;
-OneButton *pushButton;
+OneButton *loadOnOffButton;
+OneButton *vsenseButton;
 
 void timerIsr()
 {
@@ -235,44 +236,63 @@ void loadButton_longClick()
   }
 }
 
+void vsenseButton_click()
+{
+  iddleSince = millis();
+  state ^= STATE_VSENSE_EXT;
+  debug_printa(F("VSense Button pressed, new state:%2X\n"), state);
+  digitalWrite(P_VSENSE_EXT, (state & STATE_VSENSE_EXT) ? HIGH : LOW);
+}
+
 void selfTest()
 {
+  debug_print(F("Self test starting"));
   mainLcd.clearBuffer();
   uint8_t selfTestResult = 0;
   mainLcd.drawStr(10, 8, "= Electronic  Load =");
   mainLcd.drawStr(0, 20, "ADC DAC RTC IOE FLH");
 
   //Check ADC Presence
+  debug_print(F("Testing ADC.."));
   Wire.requestFrom(ADC_ADDR, 1);
   delay(1);
   if (!Wire.available())
     selfTestResult |= 0x01;
+  debug_printa("%02X \n", selfTestResult);
 
   //Check DAC Presence
+  debug_print(F("Testing DAC.."));
   Wire.requestFrom(DAC_ADDR, 1);
   delay(1);
   if (!Wire.available())
     selfTestResult |= 0x02;
+  debug_printa("%02X \n", selfTestResult);
 
   //Check RTC Presence
+  debug_print(F("Testing RTC.."));
   Wire.beginTransmission(RTC_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
   Wire.requestFrom(RTC_ADDR, 1);
   if (!Wire.available())
     selfTestResult |= 0x04;
+  debug_printa("%02X \n", selfTestResult);
 
   //Check IOX
+  debug_print(F("Testing IO Ext.."));
   Wire.beginTransmission(IOE_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
   Wire.requestFrom(IOE_ADDR, 1);
   if (!Wire.available())
     selfTestResult |= 0x08;
+  debug_printa("%02X \n", selfTestResult);
 
   //Check Flash
+  debug_print(F("Testing Flash.."));
   if (!flash.initialize())
     selfTestResult |= 0x10;
+  debug_printa("%02X \n", selfTestResult);
 
   //Result ?
   for (uint8_t i = 0; i < 5; i++)
@@ -280,6 +300,7 @@ void selfTest()
     mainLcd.drawStr(0 + 10 * i, 30, selfTestResult & (1 << i) ? "X" : "V");
   }
   mainLcd.sendBuffer();
+  debug_printa("SeltTest Result : %02X\n", selfTestResult);
 
   delay(selfTestResult > 0 ? 2000 : 500);
 
@@ -355,7 +376,7 @@ void actuateReadings()
       if (adcValue < 0)
         adcValue = 0;
       //newVoltage = adcValue * (2048.0 / 32768.0) * 50;
-      newVoltage = (float)adcValue * 3.125;
+      newVoltage = adcValue * 3.125;
       if (newVoltage != readVoltage || lastVoltageUpdate + 500 < millis())
       {
         readVoltage = newVoltage;
@@ -373,10 +394,14 @@ void actuateReadings()
     {
       if (adcValue < 0)
         adcValue = 0;
-      //newCurrent = adcValue * (2048.0 / 32768.0) * 2.5 * (1000.0 / (float)settings->r17Value);
-      newCurrent = (float)adcValue * 156.25 / (float)settings->r17Value;
+      //newCurrent = U/R = adcValue * (2048.0 / 32768.0)/4(gain) / (10000*settings->r17Value);
+      newCurrent = adcValue * 156.25 / settings->r17Value;
       if (newCurrent != readCurrent || lastCurrentUpdate + 500 < millis())
       {
+        if (newCurrent != readCurrent)
+        {
+          debug_printb(F("Updated Current Reading :"), "adcV:%ld -> Current:%d mA\n", adcValue, newCurrent);
+        }
         if (state & STATE_ONOFF)
           totalmAh += readCurrent * (millis() - lastCurrentUpdate);
         lastCurrentUpdate = millis();
@@ -445,7 +470,9 @@ void LogData()
 void setup()
 {
   Serial.begin(9600);
+  debug_print(F("Serial initialized @ 9600 baud \n"));
   // initialize the lcd
+  debug_print(F("Initializing LCD\n"));
   mainLcd.begin();
   mainLcd.clearBuffer();
 
@@ -454,7 +481,10 @@ void setup()
   pinMode(P_FAN_PWM, OUTPUT);
   digitalWrite(P_FAN_ONOFF, LOW);
   pinMode(P_LOADON_LED, OUTPUT);
+  pinMode(P_VSENSE_EXT, OUTPUT);
+  digitalWrite(P_VSENSE_EXT, state & STATE_VSENSE_EXT ? HIGH : LOW);
   pinMode(P_TRIGGER, INPUT_PULLUP);
+  debug_print(F("Pin configured\n"));
 
   //Setup Encoder
   encoder = new ClickEncoder(P_ENC1, P_ENC2, P_ENCBTN, ENC_STEPS);
@@ -463,22 +493,30 @@ void setup()
   encoder->setAccelerationEnabled(true);
   encoder->setDoubleClickEnabled(false);
   encoder->setHoldTime(500);
+  debug_print(F("Encoder setup.\n"));
 
 //Setup Load button
 #if DEBUG_BOARD
   pushButton = new OneButton(P_LOADON_BTN, 1, true);
 #else
-  pushButton = new OneButton(P_LOADON_BTN, 0, false);
+  loadOnOffButton = new OneButton(P_LOADON_BTN, 0, false);
 #endif
-  pushButton->setClickTicks(400);
-  pushButton->setPressTicks(600);
-  pushButton->attachClick(loadButton_click);
-  pushButton->attachLongPressStart(loadButton_longClick);
+  loadOnOffButton->setClickTicks(400);
+  loadOnOffButton->setPressTicks(600);
+  loadOnOffButton->attachClick(loadButton_click);
+  loadOnOffButton->attachLongPressStart(loadButton_longClick);
+  debug_print(F("Load button setup.\n"));
+
+  //Setup VSense Button
+  vsenseButton = new OneButton(P_VSENSE_BTN, 0, false);
+  vsenseButton->attachClick(vsenseButton_click);
+  debug_print(F("VSense Button setup.\n"));
+
+  selfTest();
 
   MCP342x::generalCallReset();
   delay(1); // MC342x needs 300us to settle, wait 1ms
-
-  selfTest();
+  debug_print(F("General Call Reset\n"));
 
   dac.begin();
 
@@ -509,7 +547,8 @@ void loop()
   static uint8_t buttonState;
   static uint8_t oldState = ClickEncoder::Open;
 
-  pushButton->tick();
+  loadOnOffButton->tick();
+  vsenseButton->tick();
   actuateReadings();
 
   //Alerts

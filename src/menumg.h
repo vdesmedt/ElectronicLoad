@@ -178,7 +178,7 @@ bool menu_MaxVoltageChanged(int32_t newValue)
 
 bool menu_R17Changed(int32_t newValue)
 {
-    if (newValue > 900 && newValue < 1100)
+    if (newValue > 800 && newValue < 1200)
     {
         settings->r17Value = newValue;
         settings->version |= 0x01;
@@ -308,7 +308,7 @@ void setupMenu()
 
     vmi = menu->AddValue(settings->maxVoltage, 6, 3, 0, y += yshift, menu_MaxVoltageChanged);
     vmi->SetPrefix(F("Max voltage : "));
-    vmi->SetSuffix("mA");
+    vmi->SetSuffix("mV");
     vmi->DigitIndex = 1;
 
     menu->Configure(&mainLcd, menu_pageChanged);

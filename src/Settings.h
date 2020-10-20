@@ -25,8 +25,8 @@ struct Settings
     uint16_t triggerTimer = 1000;                                 //Milliseconds
     uint8_t loggingType = 0;                                      //Loggin type (None, Serial, RFM69)
     uint16_t loggingInterval = 10;                                //ms
-    int16_t maxCurrent = 3000;                                   //mA
-    int16_t maxVoltage = 25000;                                  //mV
+    int16_t maxCurrent = 3000;                                    //mA
+    int16_t maxVoltage = 25000;                                   //mV
 };
 
 extern Settings *settings;
@@ -59,7 +59,7 @@ void SaveSettings()
     while (flash.busy())
         ;
 #if EDCL_DEBUG
-    debug_printb(F("Flashing settings:"), "%luµs\n", micros() - s);
+    debug_printb(F("Flashing settings:"), "%lu µs\n", micros() - s);
 #endif
 }
 

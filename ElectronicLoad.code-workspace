@@ -18,7 +18,8 @@
   ],
   "settings": {
     "files.associations": {
-      "limits": "cpp"
+      "limits": "cpp",
+      "*.ipp": "cpp"
     }
   }
 }

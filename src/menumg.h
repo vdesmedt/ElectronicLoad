@@ -4,6 +4,7 @@
 
 extern Menu *menu;
 extern U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI mainLcd;
+MultiChoiceMenuItem *setWorkingModeMenuItem = NULL;
 MultiDigitValueMenuItem *setValueMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCutOffMenuItem = NULL;
 MultiDigitValueMenuItem *setBattCellCountMenuItem = NULL;
@@ -230,9 +231,9 @@ void setupMenu()
     menu = new Menu(4, 20);
     //Page 0: Main Page
     menu->AddPage();
-    cmi = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 0, 12, menu_modeChanged, false);
-    cmi->SetPrefix(F("Mode;"));
-    cmi->currentChoiceIndex = settings->mode;
+    setWorkingModeMenuItem = menu->AddMultiChoice(workingModes, WORKINGMODE_COUNT, 0, 12, menu_modeChanged, false);
+    setWorkingModeMenuItem->SetPrefix(F("Mode;"));
+    setWorkingModeMenuItem->SetCurrentChoiceIndex(settings->mode);
 
     setBattCellCountMenuItem = menu->AddValue(settings->battCellCount, 1, 0, 52, 12, menu_battCellCountChanged);
     setBattCellCountMenuItem->SetPrefix(F("["));
@@ -249,21 +250,21 @@ void setupMenu()
 
     cmi = menu->AddMultiChoice(loggingMode, LOGGIN_MODE_COUNT, 0, y += yshift, menu_LoggingChanged, true);
     cmi->SetPrefix(F("Logging      : "));
-    cmi->currentChoiceIndex = settings->loggingType;
+    cmi->SetCurrentChoiceIndex(settings->loggingType);
 
     vmi = menu->AddValue(settings->loggingInterval, 5, 0, 0, y += yshift, menu_loggingIntervalChanged);
     vmi->SetPrefix(F("Log Interval : "));
 
     cmi = menu->AddMultiChoice(triggerType, TRIGGER_TYPE_COUNT, 0, y += yshift, menu_triggerTypeChanged, true);
     cmi->SetPrefix(F("Trigger Type : "));
-    cmi->currentChoiceIndex = settings->triggerType;
+    cmi->SetCurrentChoiceIndex(settings->triggerType);
 
     vmi = menu->AddValue(settings->triggerTimer, 6, 3, 0, y += yshift, menu_triggerTimeChanged);
     vmi->SetPrefix(F("Trg Timer    : "));
 
     cmi = menu->AddMultiChoice(battTypes, BATT_TYPE_COUNT, 0, y += yshift, menu_BattTypeChanged, true);
     cmi->SetPrefix(F("Battery Type : "));
-    cmi->currentChoiceIndex = settings->battType;
+    cmi->SetCurrentChoiceIndex(settings->battType);
 
     setBattCutOffMenuItem = menu->AddValue(settings->battCutOff[settings->battType], 5, 3, 0, y += yshift, menu_cutOffChanged);
     setBattCutOffMenuItem->SetPrefix(F("Batt Cut Off : "));

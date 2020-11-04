@@ -2,18 +2,6 @@
   "folders": [
     {
       "path": "."
-    },
-    {
-      "name": "I2CMixeLevels",
-      "path": "/Users/vdesmedt/Documents/PlatformIO/Projects/I2CMixeLevels"
-    },
-    {
-      "name": "ATTinyTest",
-      "path": "/Users/vdesmedt/Documents/PlatformIO/Projects/ATTinyTest"
-    },
-    {
-      "name": "ArduinoMenuTest",
-      "path": "../ArduinoMenuTest"
     }
   ],
   "settings": {

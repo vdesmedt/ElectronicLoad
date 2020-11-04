@@ -20,6 +20,9 @@
 #include <MCP79410_Timer.h>
 #include <Distribution.h>
 #include <U8g2lib.h>
+#include <HHLogger.h>
+#include <HHCentral.h>
+#include <HhMessages.h>
 
 void timerIsr();
 void setupMenu();

@@ -37,6 +37,8 @@ U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI mainLcd(U8G2_R0, /* cs=*/3, /* dc=*/1, /
 ClickEncoder *encoder;
 OneButton *loadOnOffButton;
 OneButton *vsenseButton;
+HHLogger *hhLogger;
+HHCentral *hhCentral;
 
 void timerIsr()
 {
@@ -215,6 +217,7 @@ void refreshDisplay()
 
 void loadButton_click()
 {
+  debug_print(F("OnOff Button click\n"));
   iddleSince = millis();
   if (alerts)
     return;
@@ -226,6 +229,7 @@ void loadButton_click()
 
 void loadButton_longClick()
 {
+  debug_print(F("OnOff Button long clicked\n"));
   iddleSince = millis();
   if (alerts)
     return;
@@ -240,65 +244,108 @@ void vsenseButton_click()
 {
   iddleSince = millis();
   state ^= STATE_VSENSE_EXT;
-  debug_printa(F("VSense Button pressed, new state:%2X\n"), state);
+  debug_printb(F("VSense Button pressed, new state:"), "%2X\n", state);
   digitalWrite(P_VSENSE_EXT, (state & STATE_VSENSE_EXT) ? HIGH : LOW);
 }
 
 void selfTest()
 {
-  debug_print(F("Self test starting"));
+  debug_print(F("Self test starting\n"));
   mainLcd.clearBuffer();
+  mainLcd.setFont(MMDigit08);
   uint8_t selfTestResult = 0;
   mainLcd.drawStr(10, 8, "= Electronic  Load =");
-  mainLcd.drawStr(0, 20, "ADC DAC RTC IOE FLH");
 
   //Check ADC Presence
-  debug_print(F("Testing ADC.."));
+  debug_print(F("Testing ADC..."));
+  mainLcd.drawStr(0, 20, "ADC...");
+  mainLcd.sendBuffer();
   Wire.requestFrom(ADC_ADDR, 1);
   delay(1);
   if (!Wire.available())
     selfTestResult |= 0x01;
   debug_printa("%02X \n", selfTestResult);
+  delay(500);
+  mainLcd.drawStr(30, 20, selfTestResult & 0x01 ? "NOK" : "OK");
+  mainLcd.sendBuffer();
 
   //Check DAC Presence
   debug_print(F("Testing DAC.."));
+  delay(200);
+  mainLcd.drawStr(64, 20, "DAC...");
+  mainLcd.sendBuffer();
   Wire.requestFrom(DAC_ADDR, 1);
   delay(1);
   if (!Wire.available())
     selfTestResult |= 0x02;
+  delay(500);
+  mainLcd.drawStr(94, 20, selfTestResult & 0x02 ? "NOK" : "OK");
+  mainLcd.sendBuffer();
   debug_printa("%02X \n", selfTestResult);
 
   //Check RTC Presence
   debug_print(F("Testing RTC.."));
+  delay(200);
+  mainLcd.drawStr(0, 30, "RTC...");
+  mainLcd.sendBuffer();
   Wire.beginTransmission(RTC_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
   Wire.requestFrom(RTC_ADDR, 1);
   if (!Wire.available())
     selfTestResult |= 0x04;
+  delay(500);
+  mainLcd.drawStr(30, 30, selfTestResult & 0x04 ? "NOK" : "OK");
+  mainLcd.sendBuffer();
   debug_printa("%02X \n", selfTestResult);
 
   //Check IOX
   debug_print(F("Testing IO Ext.."));
+  delay(200);
+  mainLcd.drawStr(64, 30, "IOEx...");
+  mainLcd.sendBuffer();
   Wire.beginTransmission(IOE_ADDR);
   Wire.write(uint8_t(0));
   Wire.endTransmission();
   Wire.requestFrom(IOE_ADDR, 1);
   if (!Wire.available())
     selfTestResult |= 0x08;
+  delay(500);
+  mainLcd.drawStr(94, 30, selfTestResult & 0x08 ? "NOK" : "OK");
+  mainLcd.sendBuffer();
   debug_printa("%02X \n", selfTestResult);
 
   //Check Flash
   debug_print(F("Testing Flash.."));
+  delay(200);
+  mainLcd.drawStr(0, 40, "Flash...");
+  mainLcd.sendBuffer();
   if (!flash.initialize())
     selfTestResult |= 0x10;
+  delay(500);
+  mainLcd.drawStr(30, 40, selfTestResult & 0x10 ? "NOK" : "OK");
+  mainLcd.sendBuffer();
   debug_printa("%02X \n", selfTestResult);
 
-  //Result ?
-  for (uint8_t i = 0; i < 5; i++)
-  {
-    mainLcd.drawStr(0 + 10 * i, 30, selfTestResult & (1 << i) ? "X" : "V");
-  }
+  //Chech RFM
+  debug_print(F("Testing RFM.."));
+  delay(200);
+  mainLcd.drawStr(0, 50, "RFM...");
+  mainLcd.sendBuffer();
+  int hhcerr = hhCentral->connect(true, 2000);
+  if (hhcerr != HHCNoErr)
+    selfTestResult |= 0x20;
+  delay(500);
+  char buffer[10];
+  if (selfTestResult & 0x20)
+    sprintf(buffer, "NOK[%d]", hhcerr);
+  else
+    sprintf(buffer, "OK[%d]", hhCentral->NodeId());
+  mainLcd.drawStr(30, 50, buffer);
+
+  mainLcd.sendBuffer();
+  debug_printa("%02X \n", selfTestResult);
+
   mainLcd.sendBuffer();
   debug_printa("SeltTest Result : %02X\n", selfTestResult);
 
@@ -512,6 +559,10 @@ void setup()
   vsenseButton->attachClick(vsenseButton_click);
   debug_print(F("VSense Button setup.\n"));
 
+  //HHCentral
+  hhLogger = new HHLogger(LogMode::Text);
+  hhCentral = new HHCentral(hhLogger, NodeType::ElectronicLoad, "1234567", HHEnv::Dev);
+
   selfTest();
 
   MCP342x::generalCallReset();
@@ -613,6 +664,40 @@ void loop()
       menu->LongClick();
   }
   oldState = buttonState;
+
+  //HHCentral
+  Command *cmd = hhCentral->check();
+  if (cmd != nullptr && cmd->msgType == CMD_LXI)
+  {
+    LxiCommand *lxiCmd = (LxiCommand *)cmd;
+    debug_printb(F("Lxi Command Received:"), "%s\n", lxiCmd->Command);
+    if (strcmp(lxiCmd->Command, "ON") == 0)
+    {
+      LoadOn();
+    }
+    else if (strcmp(lxiCmd->Command, "OFF") == 0)
+    {
+      LoadOff();
+    }
+    else if (strncmp(lxiCmd->Command, "CC:", 3) == 0)
+    {
+      int ma = atoi(lxiCmd->Command + 3);
+      if (settings->mode != 0)
+      {
+        setWorkingModeMenuItem->SetCurrentChoiceIndex(0);
+        menu_modeChanged(0);
+      }
+      setValueMenuItem->SetValue(ma);
+      menu_setValueChanged(ma);
+    }
+    else if (strcmp(lxiCmd->Command, "VA?") == 0)
+    {
+      VoltAmperReport vaRpt;
+      vaRpt.Tension = readVoltage;
+      vaRpt.Current = readCurrent;
+      hhCentral->send(&vaRpt);
+    }
+  }
 
   if (!(state & STATE_ONOFF) && settings->version & 0x01 && iddleSince + 5000 < millis())
     SaveSettings();

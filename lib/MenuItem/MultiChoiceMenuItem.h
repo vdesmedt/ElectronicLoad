@@ -14,9 +14,10 @@ public:
         _onChange = onChange;
         for (uint8_t i = 0; i < choicesCount; i++)
             this->_choiceMaxLength = max(this->_choiceMaxLength, strlen(choices[i]));
-        currentChoiceIndex = 0;
+        _currentChoiceIndex = 0;
     }
 
+    void SetCurrentChoiceIndex(uint8_t index) { _currentChoiceIndex = index; };
     bool RotaryIncrement(int8_t steps);
     bool Click(bool *focus, uint8_t *page);
     bool LongClick(bool *focus, uint8_t *page);
@@ -24,12 +25,12 @@ public:
     virtual const char *GetLabel();
     virtual uint8_t GetCursorOffset(bool focus);
 
-    uint8_t currentChoiceIndex = -1;
     bool (*_onChange)(int8_t);
     bool switchOnClick;
 
 protected:
     char **_choices;
+    uint8_t _currentChoiceIndex = -1;
     uint8_t _choiceCount = 0;
     uint8_t _choiceMaxLength = 0;
 };

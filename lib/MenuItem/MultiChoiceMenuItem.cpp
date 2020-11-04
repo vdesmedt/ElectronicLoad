@@ -5,7 +5,7 @@ bool MultiChoiceMenuItem::RotaryIncrement(int8_t steps)
     if (this->_choices)
     {
         static int8_t ni;
-        ni = currentChoiceIndex + steps;
+        ni = _currentChoiceIndex + steps;
         if (ni < 0)
             ni = 0;
         else if (ni >= _choiceCount)
@@ -13,7 +13,7 @@ bool MultiChoiceMenuItem::RotaryIncrement(int8_t steps)
 
         if (this->_onChange(ni))
         {
-            this->currentChoiceIndex = ni;
+            this->_currentChoiceIndex = ni;
             return true;
         }
     }
@@ -41,7 +41,7 @@ bool MultiChoiceMenuItem::LongClick(bool *focus, uint8_t *page)
 
 const char *MultiChoiceMenuItem::GetLabel()
 {
-    return _choices[currentChoiceIndex];
+    return _choices[_currentChoiceIndex];
 }
 uint8_t MultiChoiceMenuItem::GetCursorOffset(bool focus)
 {

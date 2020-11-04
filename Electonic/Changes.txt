@@ -1,0 +1,75 @@
+------Changes from V1.1------
+TODO :
+-Add Moteino Reset Button
+-Review if we need 2 capcaitors when 2 devices are so close to each others
+DONE :
+-Reverse C4 (-5V)
+-Adjust Holes (remove center, increase clearance at the back to let room for the screwdriver in front of heat sink
+-Added Test Pin for 4.096V (Near DAC)
+-Replace Load Connector for more current AK500 ?
+-Bigger footprint for D3
+-Biaise A0, A1, A2 from MCP23008 to ground
+-Remove Serial Connector (replaced by pinhead on the moteino itself)
+-Wirewound resistors Size 2010->.530 .217
+-R7 & R16 Should connect to high current at the same place and as close as possible from R17 (avoid impact of resisitivity of high current trace)
+-Improve resistance of high current tracks
+-Remove R Divider for LM35 as 10mV/°C would lead to 330°C at 3.3V
+-Invert GND VCC on Trigger's Schmitt
+-Actua PWM (4 Pins) Fan (12V with 5V PWM)
+-Better marking power supply +/-
+-Battery for RTC or BAT Pin to Ground
+-Connect MFP Pin of the RTC
+-Change test point for test loop
+REJECTED
+-Make it easier to mount pin for moteino (RST @ UART GND)
+
+
+------Changes from V1.2------
+TODO
+DONE
+* Removed MCP23008
+* Expose SPI on front panel to connect SPI LCD
+* -> Moteino Mega
+* Replace connectors to control panel with one single 16 pin connector
+
+------Changes from V1.3------
+TODO
+* Do we need schmitt triggers on Front Panel ?
+* Review connectors to VSens on DIspatch Board
+DONE
+* All TO220 should be aligne on the edge of the board
+* SMD Quartz for RTC
+* Add extra connector to PowerSupply to distribute power to other boards (Extra JST or Screw Terminal)
+* Add 5V to FrontPanel (Relay)
+* PCB for Encoder + JST5 to Front Panel Control
+* SPI on Fron Panel Control
+* Add I2C Connector to FrontPanel
+* optimize Fan Conector for 4Wires (On/Off 12V PS + 5V PWM)
+
+------Changes from V1.4------
+TODO
+
+
+DONE
+* Fixed push button with led connection
+* Revert Electrolytic Capacitor C2 on Dispatch (Relay control)
+* Inverse Inline / Extern labels on DIsplatch (Green shoudl be extern)
+* Replace Pin Header by JST for SPI Screen on Dispatch
+* Added two ground test probes
+* Enlarged holes for Rotary Encoder side pins
+* Hole down to 2.8 for ELBoard, Dispatcher, PS and Buttons
+* Smaller Cap on PS (Down to 470µ)
+* Invert Trigger input Diode
+* Added 5V/12V test probes to main board
+* Connected D13, A2, A4 to FrontPannel Connectror
+* PS - LM SHoudl be on the same side to be able to attach them to back panel's heat sink
+* Add VSense connector to Trigger PCB
+
+------Changes from V1.5------
+TODO
+* Add Ethernet to the board
+* Remove OnStart LoadOff SubCircuit
+* Add SPI Bus Connector
+* Fix GND Connection Point Voltage DIff
+
+DONE
